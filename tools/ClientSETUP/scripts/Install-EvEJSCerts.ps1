@@ -11,6 +11,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $caCertPath = Join-Path $repoRoot "server\certs\xmpp-ca-cert.pem"
 $caKeyPath = Join-Path $repoRoot "server\certs\xmpp-ca-key.pem"
 $builderScriptPath = Join-Path $PSScriptRoot "build-gateway-cert.js"
+$localCertsScriptPath = Join-Path $repoRoot "tools\LocalCerts\ensure-local-certs.js"
 $gatewayCertDir = Join-Path $repoRoot "server\src\_secondary\express\certs"
 $gatewayCertPath = Join-Path $gatewayCertDir "gateway-dev-cert.pem"
 $gatewayKeyPath = Join-Path $gatewayCertDir "gateway-dev-key.pem"
@@ -30,6 +31,14 @@ function Get-NodeCommand {
   }
 
   return $nodeCommand
+}
+
+function Ensure-LocalCertificateFiles {
+  $nodeCommand = Get-NodeCommand
+  & $nodeCommand $localCertsScriptPath --repo-root $repoRoot
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to create local EvEJS certificate files."
+  }
 }
 
 function Resolve-ConfiguredClientPath {
@@ -192,6 +201,8 @@ function Build-GatewayCertificate {
   Write-Step "Built CA-signed public-gateway TLS cert under $gatewayCertDir"
   return $previousLeafPem
 }
+
+Ensure-LocalCertificateFiles
 
 if (-not (Test-Path $caCertPath)) {
   throw "Missing CA certificate at $caCertPath"

@@ -25,6 +25,25 @@ function randomSerialNumber() {
   return hex.replace(/^0+/, "") || "01";
 }
 
+function ensureDefaultCertificateAuthority(caCertPath, caKeyPath) {
+  if (fs.existsSync(caCertPath) && fs.existsSync(caKeyPath)) {
+    return;
+  }
+  if (
+    path.resolve(caCertPath) !== path.resolve(CA_CERT_PATH) ||
+    path.resolve(caKeyPath) !== path.resolve(CA_KEY_PATH)
+  ) {
+    return;
+  }
+  const { ensureLocalCerts } = require(path.join(
+    ROOT_DIR,
+    "tools",
+    "LocalCerts",
+    "ensure-local-certs.js",
+  ));
+  ensureLocalCerts({ repoRoot: ROOT_DIR });
+}
+
 function buildSubjectAltNames() {
   return [
     ...LOCAL_TLS_DNS_ALT_NAMES.map((value) => ({ type: 2, value })),
@@ -144,6 +163,8 @@ function ensureLocalLeafCertificate(options = {}) {
     options.outKeyPath || path.join(certDir, "gateway-dev-key.pem");
   const caCertPath = options.caCertPath || CA_CERT_PATH;
   const caKeyPath = options.caKeyPath || CA_KEY_PATH;
+
+  ensureDefaultCertificateAuthority(caCertPath, caKeyPath);
 
   if (
     fs.existsSync(outCertPath) &&

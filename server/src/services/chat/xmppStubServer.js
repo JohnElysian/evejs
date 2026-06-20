@@ -42,6 +42,7 @@ let messageSequence = 0;
 
 const connectedClients = new Set();
 const roomMembers = new Map();
+const repoRoot = path.join(__dirname, "../../../..");
 const transcriptDir = path.join(__dirname, "../../../logs");
 const transcriptPath = path.join(transcriptDir, "xmpp-stub.log");
 const certDir = path.join(__dirname, "../../../certs");
@@ -54,7 +55,21 @@ function ensureTranscriptDir() {
   }
 }
 
+function ensureLocalTlsFiles() {
+  if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+    return;
+  }
+  const { ensureLocalCerts } = require(path.join(
+    repoRoot,
+    "tools",
+    "LocalCerts",
+    "ensure-local-certs.js",
+  ));
+  ensureLocalCerts({ repoRoot });
+}
+
 function readTlsCredentials() {
+  ensureLocalTlsFiles();
   if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
     throw new Error(
       `Missing XMPP TLS certificate files at ${certDir}`,

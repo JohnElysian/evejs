@@ -5,8 +5,8 @@ This repository is intended to contain source code and local tooling only.
 It must not contain:
 
 - EVE Online client files.
-- CCP static data exports.
-- CCP artwork, audio, binaries, archives, or asset packages.
+- CCP/Fenris static data exports.
+- CCP/Fenris artwork, audio, binaries, archives, or asset packages.
 - Patched `blue.dll` files or `.original` backups.
 - Private keys, local certificates, generated databases, market databases, logs,
   cache files, or player/runtime state.
@@ -14,7 +14,7 @@ It must not contain:
 Users must supply their own legally obtained EVE Online client and generate any
 required local data on their own machine.
 
-This project is not affiliated with, endorsed by, or approved by CCP Games. EVE
+This project is not affiliated with, endorsed by, or approved by CCP Games / Fenris Creations. EVE
 Online and related names, marks, assets, and data belong to their respective
 owners.
 

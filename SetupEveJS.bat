@@ -43,6 +43,17 @@ if errorlevel 1 (
 )
 
 echo.
+echo   Preparing local TLS certificates...
+call node "%EVEJS_REPO_ROOT%\tools\LocalCerts\ensure-local-certs.js" --repo-root "%EVEJS_REPO_ROOT%"
+if errorlevel 1 (
+  echo.
+  echo   [ERROR] Local certificate creation failed.
+  popd
+  pause
+  exit /b 1
+)
+
+echo.
 echo   Creating local generated database...
 call "%EVEJS_REPO_ROOT%\tools\DatabaseCreator\CreateDatabase.bat"
 if errorlevel 1 (

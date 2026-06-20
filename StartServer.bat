@@ -45,6 +45,9 @@ if errorlevel 1 exit /b 1
 call :EnsureServerDependencies
 if errorlevel 1 exit /b 1
 
+call :EnsureLocalCertificates
+if errorlevel 1 exit /b 1
+
 echo   Are you also playing on this machine?
 echo.
 echo     [1] Server only  -  just run the server
@@ -120,6 +123,20 @@ echo   Dependencies installed successfully.
 echo.
 exit /b 0
 
+:EnsureLocalCertificates
+if exist "%EVEJS_REPO_ROOT%\server\certs\xmpp-dev-cert.pem" if exist "%EVEJS_REPO_ROOT%\server\certs\xmpp-dev-key.pem" if exist "%EVEJS_REPO_ROOT%\server\src\_secondary\express\certs\gateway-dev-cert.pem" exit /b 0
+
+echo   Preparing local TLS certificates...
+call node "%EVEJS_REPO_ROOT%\tools\LocalCerts\ensure-local-certs.js" --repo-root "%EVEJS_REPO_ROOT%"
+set "EVEJS_CERT_EXIT=!errorlevel!"
+if not "!EVEJS_CERT_EXIT!"=="0" (
+  echo.
+  echo   [ERROR] Local certificate creation failed with code !EVEJS_CERT_EXIT!.
+  echo       Run SetupEveJS.bat or check your Node.js/server dependency install.
+  pause
+  exit /b !EVEJS_CERT_EXIT!
+)
+exit /b 0
 :EnsureGeneratedDatabase
 if exist "%EVEJS_NEWDB_DATA_DIR%\itemTypes\data.json" if exist "%EVEJS_NEWDB_DATA_DIR%\accounts\data.json" exit /b 0
 
