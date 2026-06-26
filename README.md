@@ -73,9 +73,8 @@ tools\DatabaseCreator\bin\DatabaseCreator.exe
 ```
 
 The creator verifies your copied client, downloads or reuses the supported
-public EVE static-data export, generates the public SDE-backed tables, then
-applies its embedded EvEJS catalog for the remaining local authority data. The
-finished database is written to:
+public EVE static-data export, and creates the local database. The finished
+database is written to:
 
 ```text
 _local\newDatabase\data
