@@ -10,9 +10,9 @@ echo   ============================================================
 echo     EvEJS One-Click Setup
 echo   ============================================================
 echo.
-echo   This installs Node dependencies, generates the local database,
-echo   then opens ClientSETUP so you can select and patch your own
-echo   copied EVE client.
+echo   This installs Node dependencies, opens ClientSETUP so you can
+echo   select and patch your own copied EVE client, then generates
+echo   the local database.
 echo.
 
 call :EnsureNode
@@ -54,23 +54,23 @@ if errorlevel 1 (
 )
 
 echo.
-echo   Creating local generated database...
-call "%EVEJS_REPO_ROOT%\tools\DatabaseCreator\CreateDatabase.bat"
-if errorlevel 1 (
-  echo.
-  echo   [ERROR] Database creation failed.
-  popd
-  pause
-  exit /b 1
-)
-
-echo.
 echo   Opening ClientSETUP. Select your copied EVE client and complete
 echo   the certificate, blue.dll patch, and start.ini steps.
 call "%EVEJS_REPO_ROOT%\tools\ClientSETUP\StartClientSetup.bat"
 if errorlevel 1 (
   echo.
   echo   [ERROR] ClientSETUP reported a failure.
+  popd
+  pause
+  exit /b 1
+)
+
+echo.
+echo   Creating local generated database...
+call "%EVEJS_REPO_ROOT%\DatabaseCreator.bat"
+if errorlevel 1 (
+  echo.
+  echo   [ERROR] Database creation failed.
   popd
   pause
   exit /b 1
