@@ -94,3 +94,10 @@ Thumbs.db
 
 # Tool-generated UI assets
 /tools/ConfigEditor/assets/
+
+# DatabaseCreator ships as one native binary. The exe recreates its ignored
+# support files locally when it runs.
+/tools/DatabaseCreator/**
+!/tools/DatabaseCreator/
+!/tools/DatabaseCreator/bin/
+!/tools/DatabaseCreator/bin/DatabaseCreator.exe
