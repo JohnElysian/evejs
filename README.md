@@ -26,8 +26,9 @@ Fenris Creations.
 2. Make a separate copy of your EVE Online client.
 3. Run `SetupEveJS.bat`.
 4. Select your copied EVE client when the setup wizard asks for it.
-5. Run `StartServer.bat`.
-6. Choose option `2` to start the server and launch the client.
+5. Let setup run `DatabaseCreator.bat` to build the complete local database.
+6. Run `StartServer.bat`.
+7. Choose option `2` to start the server and launch the client.
 
 The setup flow installs the needed Node packages, creates the local EvEJS
 database, prepares local certificates, and opens the client setup wizard.
@@ -48,13 +49,44 @@ for Tranquility.
 ## What You Get
 
 - One-click first-time setup with `SetupEveJS.bat`.
-- Local database generation from the supported public static-data export.
+- Complete local database generation with `DatabaseCreator.bat`.
 - Client setup wizard for copied-client configuration.
 - Local chat and public-gateway certificate generation.
 - Starter accounts: `test` and `test2`.
 - Built-in HyperNet seed support for local experimentation.
 - Optional market tooling and market daemon support.
 - A growing server codebase focused on EVE client parity.
+
+## Database Creation
+
+EvEJS does not ship the generated database as loose JSON files. Instead, the
+repo includes a native database creator:
+
+```bat
+DatabaseCreator.bat
+```
+
+That launcher calls:
+
+```bat
+tools\DatabaseCreator\bin\DatabaseCreator.exe
+```
+
+The creator verifies your copied client, downloads or reuses the supported
+public EVE static-data export, generates the public SDE-backed tables, then
+applies its embedded EvEJS catalog for the remaining local authority data. The
+finished database is written to:
+
+```text
+_local\newDatabase\data
+```
+
+If client setup has already saved your copied-client path, you can run
+`DatabaseCreator.bat` with no arguments. Otherwise pass it explicitly:
+
+```bat
+DatabaseCreator.bat --client-dir C:\Path\To\Copied\EVE\tq
+```
 
 ## Daily Use
 
