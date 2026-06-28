@@ -74,6 +74,12 @@ if not exist "%EVEJS_CA_PEM%" (
 for %%I in ("%CLIENT_EXE%") do set "CLIENT_DIR=%%~dpI"
 for %%I in ("%CLIENT_DIR%..") do set "CLIENT_ROOT=%%~fI"
 
+call :ResolveClientResourceCache
+if errorlevel 1 (
+  pause
+  exit /b 1
+)
+
 call :ApplyClientNetworkPolicy "%EVEJS_PROXY_URL%"
 if errorlevel 1 (
   echo   [ERROR] Could not apply client network policy.
@@ -84,6 +90,7 @@ if errorlevel 1 (
 echo   Launching EVE client...
 echo.
 echo     Client: %CLIENT_EXE%
+echo     ResFiles: %EO_REMOTEFILECACHEFOLDER%
 echo     Proxy:  %EVEJS_PROXY_URL%
 echo     CA cert: %EVEJS_CA_PEM%
 echo.
@@ -91,6 +98,12 @@ echo   ============================================================
 echo     Game is running. This window will close when you exit.
 echo   ============================================================
 echo.
+
+if "%EVEJS_DRY_RUN%"=="1" (
+  echo   Dry run complete. Client launch skipped.
+  ping -n 3 127.0.0.1 >nul 2>&1
+  exit /b 0
+)
 
 cd /d "%CLIENT_DIR%"
 set "EVEJS_CLIENT_STDIO_LOG=%TEMP%\evejs-client-stdout-%RANDOM%%RANDOM%.log"
@@ -132,6 +145,42 @@ rem Blank the retail Sentry DSN at process start so the client never boots it.
 set "EVE_CLIENT_SENTRY_DSN="
 
 set "EVEJS_PROXY_TARGET="
+exit /b 0
+
+:ResolveClientResourceCache
+set "EVEJS_CLIENT_RESFILES="
+
+rem ClientSETUP stores EVEJS_CLIENT_PATH as the selected client's tq folder.
+rem The EVE resource cache for that same client lives beside tq as ..\ResFiles.
+if defined EVEJS_CLIENT_PATH (
+  for %%I in ("%EVEJS_CLIENT_PATH%\..") do set "EVEJS_CLIENT_RESFILES=%%~fI\ResFiles"
+)
+
+rem If an explicit executable was configured, derive the same cache from that executable.
+if not defined EVEJS_CLIENT_RESFILES if defined CLIENT_ROOT (
+  for %%I in ("%CLIENT_ROOT%\..") do set "EVEJS_CLIENT_RESFILES=%%~fI\ResFiles"
+)
+
+if not defined EVEJS_CLIENT_RESFILES (
+  echo.
+  echo   [ERROR] Could not resolve the configured client's ResFiles folder.
+  echo       Run tools\ClientSETUP\StartClientSetup.bat again.
+  exit /b 1
+)
+
+if not exist "%EVEJS_CLIENT_RESFILES%" (
+  mkdir "%EVEJS_CLIENT_RESFILES%" >nul 2>&1
+)
+
+if not exist "%EVEJS_CLIENT_RESFILES%" (
+  echo.
+  echo   [ERROR] Client ResFiles folder is missing and could not be created:
+  echo       %EVEJS_CLIENT_RESFILES%
+  exit /b 1
+)
+
+set "EO_REMOTEFILECACHEFOLDER=%EVEJS_CLIENT_RESFILES%"
+set "EVEJS_CLIENT_RESFILES="
 exit /b 0
 
 :ResolveConfigDir
