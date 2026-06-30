@@ -44,7 +44,7 @@ if errorlevel 1 (
 
 echo.
 echo   Preparing local TLS certificates...
-call node "%EVEJS_REPO_ROOT%\tools\LocalCerts\ensure-local-certs.js" --repo-root "%EVEJS_REPO_ROOT%"
+call powershell -NoProfile -ExecutionPolicy Bypass -File "%EVEJS_REPO_ROOT%\tools\ClientSETUP\scripts\Install-EvEJSCerts.ps1" -SkipRootStore -SkipClientBundles
 if errorlevel 1 (
   echo.
   echo   [ERROR] Local certificate creation failed.

@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const tls = require("tls");
+const childProcess = require("child_process");
 
 const log = require(path.join(__dirname, "../../utils/logger"));
 const rotatingLog = require(path.join(__dirname, "../../utils/rotatingLog"));
@@ -48,6 +49,15 @@ const transcriptPath = path.join(transcriptDir, "xmpp-stub.log");
 const certDir = path.join(__dirname, "../../../certs");
 const certPath = path.join(certDir, "xmpp-dev-cert.pem");
 const keyPath = path.join(certDir, "xmpp-dev-key.pem");
+const caCertPath = path.join(certDir, "xmpp-ca-cert.pem");
+const caKeyPath = path.join(certDir, "xmpp-ca-key.pem");
+const certBuilderPath = path.join(
+  repoRoot,
+  "tools",
+  "ClientSETUP",
+  "scripts",
+  "build-gateway-cert.js",
+);
 
 function ensureTranscriptDir() {
   if (!fs.existsSync(transcriptDir)) {
@@ -59,13 +69,33 @@ function ensureLocalTlsFiles() {
   if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     return;
   }
-  const { ensureLocalCerts } = require(path.join(
-    repoRoot,
-    "tools",
-    "LocalCerts",
-    "ensure-local-certs.js",
-  ));
-  ensureLocalCerts({ repoRoot });
+
+  fs.mkdirSync(certDir, { recursive: true });
+  const result = childProcess.spawnSync(
+    process.execPath,
+    [
+      certBuilderPath,
+      "--ensure-ca",
+      "--ca-cert",
+      caCertPath,
+      "--ca-key",
+      caKeyPath,
+      "--common-name",
+      "localhost",
+      "--dns",
+      "localhost",
+      "--ip",
+      "127.0.0.1",
+      "--out-cert",
+      certPath,
+      "--out-key",
+      keyPath,
+    ],
+    { stdio: "inherit" },
+  );
+  if (result.status !== 0) {
+    throw new Error(`Failed to build XMPP TLS certificate (${result.status})`);
+  }
 }
 
 function readTlsCredentials() {

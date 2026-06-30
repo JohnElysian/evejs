@@ -56,6 +56,16 @@ test("release guard rejects client/data/binary/key/runtime artifacts", () => {
   }
 });
 
+test("release guard allows only the approved DatabaseCreator executable", () => {
+  const allowed = "tools/DatabaseCreator/bin/DatabaseCreator.exe";
+  assert.deepEqual(pathViolations([allowed]), []);
+
+  const forbidden = "tools/DatabaseCreator/bin/OtherTool.exe";
+  assert.ok(
+    pathViolations([forbidden]).some((violation) => violation.startsWith(forbidden)),
+  );
+});
+
 test("release guard rejects legacy binary patch payload fields and local paths", () => {
   const root = makeTempDir();
   const filePath = path.join(root, "tools", "ClientSETUP", "bad_recipe.json");

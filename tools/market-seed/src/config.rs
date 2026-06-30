@@ -142,7 +142,7 @@ impl MarketSeedConfig {
 }
 
 fn default_static_data_dir() -> PathBuf {
-    PathBuf::from("../../server/src/newDatabase/data")
+    PathBuf::from("../../_local/newDatabase/data")
 }
 
 fn default_database_path() -> PathBuf {

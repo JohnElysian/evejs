@@ -1,5 +1,5 @@
 [input]
-static_data_dir = "../../server/src/newDatabase/data"
+static_data_dir = "../../_local/newDatabase/data"
 
 [output]
 database_path = "../../externalservices/market-server/data/bench/market-bench.sqlite"

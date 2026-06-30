@@ -48,7 +48,7 @@ test("CreateCharacterWithDoll gives non-dev Amarr characters the CCP starter ski
   assert.ok(expectedRaceProfile, "expected an Amarr creation-race profile");
 
   const newCharacterId = service.Handle_CreateCharacterWithDoll(
-    ["Starter Skill Seed Test", 5, 1, 1, null, null, 11],
+    ["Starter Seed", 5, 1, 1, null, null, 11],
     { userid: 900001 },
   );
 
@@ -119,7 +119,7 @@ test("CreateCharacterWithDoll seeds all published skills to V when devBootstrapP
   const unpublishedSkillTypes = getUnpublishedSkillTypes({ refresh: true });
 
   const newCharacterId = service.Handle_CreateCharacterWithDoll(
-    ["Published Seed Test", 5, 1, 1, null, null, 11],
+    ["Published Seed", 5, 1, 1, null, null, 11],
     { userid: 900001 },
   );
 
@@ -164,7 +164,7 @@ test("CreateCharacterWithDoll seeds initial ISK and PLEX history entries", async
 
   const service = new CharService();
   const newCharacterId = service.Handle_CreateCharacterWithDoll(
-    ["Wallet History Seed Test", 5, 1, 1, null, null, 11],
+    ["Wallet Seed", 5, 1, 1, null, null, 11],
     { userid: 900001 },
   );
 

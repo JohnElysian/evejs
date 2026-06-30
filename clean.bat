@@ -39,6 +39,7 @@ call :RemoveDir "tools\market-seed\cache"
 call :RemoveDir "tools\market-seed\target"
 call :RemoveDir "tools\market-seederv2\cache"
 call :RemoveDir "tools\market-seederv2\target"
+call :RemoveDir "tools\ClientCodeGrabber\Latest"
 call :RemoveDir "node_modules"
 call :RemoveDir "server\node_modules"
 
@@ -110,7 +111,11 @@ for /r %%F in (npm-debug*.log yarn-error*.log pnpm-debug*.log hs_err_pid*.log) d
   )
 )
 
-for /d /r %%D in (.cache .pytest_cache .nyc_output coverage target cache node_modules) do (
+rem Keep this list to unambiguously generated dependency/build folders.
+rem Do not include a generic "cache" entry here: source folders such as
+rem server\src\services\cache are real code, while generated cache folders are
+rem removed explicitly above.
+for /d /r %%D in (.cache .pytest_cache .nyc_output coverage target node_modules) do (
   set "TARGET=%%~fD"
   if exist "!TARGET!\" (
     echo(!TARGET!| findstr /I /C:"\client\\" >nul

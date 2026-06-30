@@ -5,6 +5,7 @@ title EvEJS - Build Market Seed
 for %%I in ("%~dp0..\..") do set "EVEJS_REPO_ROOT=%%~fI"
 set "MARKET_SEED_DIR=%EVEJS_REPO_ROOT%\tools\market-seed"
 set "MARKET_SEED_CONFIG=%MARKET_SEED_DIR%\config\market-seed.local.toml"
+set "EVEJS_NEWDB_DATA_DIR=%EVEJS_REPO_ROOT%\_local\newDatabase\data"
 
 call :ResolveCargo
 if errorlevel 1 exit /b 1
@@ -61,6 +62,8 @@ if errorlevel 1 goto FullBuild
 :FullBuild
 echo   Building the full seeded market database...
 echo.
+call :RequireGeneratedDatabase
+if errorlevel 1 exit /b 1
 pushd "%MARKET_SEED_DIR%"
 "%CARGO_EXE%" run --release -- --config config/market-seed.local.toml build --force
 set "EVEJS_EXIT=%errorlevel%"
@@ -71,6 +74,8 @@ goto Finish
 echo   Building the Jita + New Caldari seeded market database...
 echo   Preset: jita_new_caldari
 echo.
+call :RequireGeneratedDatabase
+if errorlevel 1 exit /b 1
 pushd "%MARKET_SEED_DIR%"
 "%CARGO_EXE%" run --release -- --config config/market-seed.local.toml build --force --preset jita_new_caldari
 set "EVEJS_EXIT=%errorlevel%"
@@ -80,6 +85,8 @@ goto Finish
 :QuickSmoke
 echo   Building a quick smoke-test market database...
 echo.
+call :RequireGeneratedDatabase
+if errorlevel 1 exit /b 1
 pushd "%MARKET_SEED_DIR%"
 "%CARGO_EXE%" run -- --config config/market-seed.local.toml build --force --station-limit 25 --type-limit 250
 set "EVEJS_EXIT=%errorlevel%"
@@ -162,6 +169,29 @@ echo   [!] Rust cargo.exe was not found.
 echo       Run tools\InstallRustForMarket.bat
 echo       or install Rust manually with:
 echo       winget install -e --id Rustlang.Rustup
+echo.
+pause
+exit /b 1
+
+:RequireGeneratedDatabase
+if exist "%EVEJS_NEWDB_DATA_DIR%\stations\data.json" if exist "%EVEJS_NEWDB_DATA_DIR%\solarSystems\data.json" if exist "%EVEJS_NEWDB_DATA_DIR%\itemTypes\data.json" exit /b 0
+echo.
+echo   [!] Generated EveJS database data was not found.
+echo       Expected:
+echo       %EVEJS_NEWDB_DATA_DIR%
+echo.
+echo       Running DatabaseCreator.bat now...
+echo.
+call "%EVEJS_REPO_ROOT%\DatabaseCreator.bat"
+if errorlevel 1 (
+  echo.
+  echo   [ERROR] DatabaseCreator.bat failed. Market seeding cannot continue.
+  pause
+  exit /b 1
+)
+if exist "%EVEJS_NEWDB_DATA_DIR%\stations\data.json" if exist "%EVEJS_NEWDB_DATA_DIR%\solarSystems\data.json" if exist "%EVEJS_NEWDB_DATA_DIR%\itemTypes\data.json" exit /b 0
+echo.
+echo   [ERROR] DatabaseCreator.bat completed, but required generated market inputs are still missing.
 echo.
 pause
 exit /b 1

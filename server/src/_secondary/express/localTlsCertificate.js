@@ -25,6 +25,42 @@ function randomSerialNumber() {
   return hex.replace(/^0+/, "") || "01";
 }
 
+function createDefaultCertificateAuthority(caCertPath, caKeyPath) {
+  const keyPair = forge.pki.rsa.generateKeyPair(2048);
+  const cert = forge.pki.createCertificate();
+  const now = new Date();
+  const notBefore = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const notAfter = new Date(now.getTime());
+  notAfter.setFullYear(notAfter.getFullYear() + 20);
+
+  cert.publicKey = keyPair.publicKey;
+  cert.serialNumber = randomSerialNumber();
+  cert.validity.notBefore = notBefore;
+  cert.validity.notAfter = notAfter;
+  cert.setSubject([
+    { name: "organizationName", value: "EvEJS Local" },
+    { name: "commonName", value: "EvEJS Local Development CA" },
+  ]);
+  cert.setIssuer(cert.subject.attributes);
+  cert.setExtensions([
+    { name: "basicConstraints", cA: true, critical: true },
+    {
+      name: "keyUsage",
+      keyCertSign: true,
+      cRLSign: true,
+      digitalSignature: true,
+      critical: true,
+    },
+    { name: "subjectKeyIdentifier" },
+  ]);
+  cert.sign(keyPair.privateKey, forge.md.sha256.create());
+
+  ensureParentDirectory(caCertPath);
+  ensureParentDirectory(caKeyPath);
+  fs.writeFileSync(caCertPath, forge.pki.certificateToPem(cert), "utf8");
+  fs.writeFileSync(caKeyPath, forge.pki.privateKeyToPem(keyPair.privateKey), "utf8");
+}
+
 function ensureDefaultCertificateAuthority(caCertPath, caKeyPath) {
   if (fs.existsSync(caCertPath) && fs.existsSync(caKeyPath)) {
     return;
@@ -35,13 +71,7 @@ function ensureDefaultCertificateAuthority(caCertPath, caKeyPath) {
   ) {
     return;
   }
-  const { ensureLocalCerts } = require(path.join(
-    ROOT_DIR,
-    "tools",
-    "LocalCerts",
-    "ensure-local-certs.js",
-  ));
-  ensureLocalCerts({ repoRoot: ROOT_DIR });
+  createDefaultCertificateAuthority(caCertPath, caKeyPath);
 }
 
 function buildSubjectAltNames() {
@@ -155,6 +185,29 @@ function hasRequiredAltNames(certPem) {
   );
 }
 
+function firstCertificatePem(pemText) {
+  const match = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/.exec(
+    String(pemText || ""),
+  );
+  return match ? match[0] : "";
+}
+
+function isSignedByCertificateAuthority(certPem, caCertPath) {
+  try {
+    const leafPem = firstCertificatePem(certPem);
+    const caPem = firstCertificatePem(fs.readFileSync(caCertPath, "utf8"));
+    if (!leafPem || !caPem) {
+      return false;
+    }
+
+    const leaf = new crypto.X509Certificate(leafPem);
+    const ca = new crypto.X509Certificate(caPem);
+    return leaf.issuer === ca.subject && leaf.verify(ca.publicKey);
+  } catch {
+    return false;
+  }
+}
+
 function ensureLocalLeafCertificate(options = {}) {
   const certDir = options.certDir || path.join(__dirname, "certs");
   const outCertPath =
@@ -169,7 +222,8 @@ function ensureLocalLeafCertificate(options = {}) {
   if (
     fs.existsSync(outCertPath) &&
     fs.existsSync(outKeyPath) &&
-    hasRequiredAltNames(fs.readFileSync(outCertPath, "utf8"))
+    hasRequiredAltNames(fs.readFileSync(outCertPath, "utf8")) &&
+    isSignedByCertificateAuthority(fs.readFileSync(outCertPath, "utf8"), caCertPath)
   ) {
     return {
       outCertPath,
@@ -200,4 +254,5 @@ module.exports = {
   buildLocalLeafCertificate,
   ensureLocalLeafCertificate,
   hasRequiredAltNames,
+  isSignedByCertificateAuthority,
 };

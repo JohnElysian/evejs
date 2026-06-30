@@ -7,6 +7,10 @@ const cp = require("child_process");
 
 const repoRoot = path.resolve(__dirname, "../..");
 
+const ALLOWED_BINARY_PATHS = new Set([
+  "tools/databasecreator/bin/databasecreator.exe",
+]);
+
 const FORBIDDEN_PATH_PATTERNS = [
   /^client(?:\/|$)/i,
   /^_backup(?:\/|$)/i,
@@ -102,6 +106,9 @@ function toRepoPath(filePath) {
 
 function isForbiddenPath(repoPath) {
   const normalized = toRepoPath(repoPath);
+  if (ALLOWED_BINARY_PATHS.has(normalized.toLowerCase())) {
+    return false;
+  }
   return FORBIDDEN_PATH_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
@@ -255,6 +262,7 @@ module.exports = {
   verify,
   pathViolations,
   contentViolations,
+  ALLOWED_BINARY_PATHS,
   FORBIDDEN_PATH_PATTERNS,
   TEXT_CONTENT_PATTERNS,
 };

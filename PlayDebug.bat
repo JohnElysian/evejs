@@ -73,6 +73,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
+call :EnsureClientCertificateTrust
+if errorlevel 1 (
+  echo   [ERROR] Could not prepare client certificate trust.
+  pause
+  exit /b 1
+)
+
 call :ApplyClientNetworkPolicy "%EVEJS_PROXY_URL%"
 if errorlevel 1 (
   echo   [ERROR] Could not apply client network policy.
@@ -173,8 +180,28 @@ set "EO_REMOTEFILECACHEFOLDER=%EVEJS_CLIENT_RESFILES%"
 set "EVEJS_CLIENT_RESFILES="
 exit /b 0
 
+:EnsureClientCertificateTrust
+set "EVEJS_CERT_INSTALLER=%EVEJS_REPO_ROOT%\tools\ClientSETUP\scripts\Install-EvEJSCerts.ps1"
+if not exist "%EVEJS_CERT_INSTALLER%" (
+  echo.
+  echo   [ERROR] Certificate installer is missing:
+  echo       %EVEJS_CERT_INSTALLER%
+  set "EVEJS_CERT_INSTALLER="
+  exit /b 1
+)
+
+echo   Checking client certificate trust...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%EVEJS_CERT_INSTALLER%" -ClientPath "%EVEJS_CLIENT_PATH%"
+set "EVEJS_CERT_EXIT=%errorlevel%"
+set "EVEJS_CERT_INSTALLER="
+if not "%EVEJS_CERT_EXIT%"=="0" exit /b %EVEJS_CERT_EXIT%
+exit /b 0
+
 :ResolveConfigDir
 set "EVEJS_CONFIG_DIR="
+if not exist "%EVEJS_REPO_ROOT%\tools\ClientSETUP\scripts\EvEJSConfig.bat" if exist "%EVEJS_REPO_ROOT%\tools\ClientSETUP\scripts\EvEJSConfig.example.bat" (
+  copy /y "%EVEJS_REPO_ROOT%\tools\ClientSETUP\scripts\EvEJSConfig.example.bat" "%EVEJS_REPO_ROOT%\tools\ClientSETUP\scripts\EvEJSConfig.bat" >nul
+)
 if exist "%EVEJS_REPO_ROOT%\tools\ClientSETUP\scripts\EvEJSConfig.bat" (
   set "EVEJS_CONFIG_DIR=%EVEJS_REPO_ROOT%\tools\ClientSETUP\scripts"
   exit /b 0

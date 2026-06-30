@@ -127,7 +127,7 @@ exit /b 0
 if exist "%EVEJS_REPO_ROOT%\server\certs\xmpp-dev-cert.pem" if exist "%EVEJS_REPO_ROOT%\server\certs\xmpp-dev-key.pem" if exist "%EVEJS_REPO_ROOT%\server\src\_secondary\express\certs\gateway-dev-cert.pem" exit /b 0
 
 echo   Preparing local TLS certificates...
-call node "%EVEJS_REPO_ROOT%\tools\LocalCerts\ensure-local-certs.js" --repo-root "%EVEJS_REPO_ROOT%"
+call powershell -NoProfile -ExecutionPolicy Bypass -File "%EVEJS_REPO_ROOT%\tools\ClientSETUP\scripts\Install-EvEJSCerts.ps1" -SkipRootStore -SkipClientBundles
 set "EVEJS_CERT_EXIT=!errorlevel!"
 if not "!EVEJS_CERT_EXIT!"=="0" (
   echo.

@@ -8,15 +8,21 @@ const tidiAutoscaler = require(path.join(
   "server/src/utils/tidiAutoscaler",
 ));
 
-function buildOptions(calls) {
+function buildMetrics(factor) {
   return {
-    getSceneCount: () => 1,
-    getSystemIDs: () => [30000142],
+    endedAtMonotonicMs: 1000,
+    factor,
+    avgActualIntervalMs: factor >= 1.0 ? 100 : 100 / factor,
+    avgTickDurationMs: factor >= 1.0 ? 20 : 100 / factor,
+    maxLatenessMs: factor >= 1.0 ? 0 : (100 / factor) - 100,
+    sceneCount: 1,
+  };
+}
+
+function buildOptions() {
+  return {
     logChange: false,
-    scheduleChange: (systemIDs, factor) => {
-      calls.push({ systemIDs: [...systemIDs], factor });
-      return null;
-    },
+    schedule: false,
   };
 }
 
@@ -25,28 +31,26 @@ test.afterEach(() => {
 });
 
 test("autoscaler tightens TiDi directly to the target factor", () => {
-  const calls = [];
-  const options = buildOptions(calls);
+  const options = buildOptions();
 
-  const result = tidiAutoscaler._testing.evaluateMeasuredCpuPercent(100, options);
+  const result = tidiAutoscaler._testing.evaluateWindowMetrics(
+    buildMetrics(0.1),
+    options,
+  );
   assert.equal(result.changed, true);
   assert.equal(result.reason, "tighten");
   assert.equal(result.targetFactor, 0.1);
-  assert.deepEqual(calls, [
-    { systemIDs: [30000142], factor: 0.1 },
-  ]);
   assert.equal(tidiAutoscaler._testing.getCurrentFactor(), 0.1);
 });
 
 test("autoscaler requires two low-load polls before relaxing TiDi to the target factor", () => {
-  const calls = [];
-  const options = buildOptions(calls);
+  const options = buildOptions();
 
-  tidiAutoscaler._testing.evaluateMeasuredCpuPercent(100, options);
+  tidiAutoscaler._testing.evaluateWindowMetrics(buildMetrics(0.1), options);
   assert.equal(tidiAutoscaler._testing.getCurrentFactor(), 0.1);
 
-  const firstRelaxAttempt = tidiAutoscaler._testing.evaluateMeasuredCpuPercent(
-    55,
+  const firstRelaxAttempt = tidiAutoscaler._testing.evaluateWindowMetrics(
+    buildMetrics(1.0),
     options,
   );
   assert.equal(firstRelaxAttempt.changed, false);
@@ -54,12 +58,10 @@ test("autoscaler requires two low-load polls before relaxing TiDi to the target 
   assert.equal(firstRelaxAttempt.targetFactor, 1.0);
   assert.equal(tidiAutoscaler._testing.getCurrentFactor(), 0.1);
   assert.equal(tidiAutoscaler._testing.getPendingRelaxFactor(), 1.0);
-  assert.equal(tidiAutoscaler._testing.getPendingRelaxPolls(), 1);
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls.at(-1), { systemIDs: [30000142], factor: 0.1 });
+  assert.equal(tidiAutoscaler._testing.getPendingRelaxWindows(), 1);
 
-  const secondRelaxAttempt = tidiAutoscaler._testing.evaluateMeasuredCpuPercent(
-    55,
+  const secondRelaxAttempt = tidiAutoscaler._testing.evaluateWindowMetrics(
+    buildMetrics(1.0),
     options,
   );
   assert.equal(secondRelaxAttempt.changed, true);
@@ -67,36 +69,32 @@ test("autoscaler requires two low-load polls before relaxing TiDi to the target 
   assert.equal(secondRelaxAttempt.targetFactor, 1.0);
   assert.equal(tidiAutoscaler._testing.getCurrentFactor(), 1.0);
   assert.equal(tidiAutoscaler._testing.getPendingRelaxFactor(), null);
-  assert.equal(tidiAutoscaler._testing.getPendingRelaxPolls(), 0);
-  assert.deepEqual(calls.at(-1), { systemIDs: [30000142], factor: 1.0 });
+  assert.equal(tidiAutoscaler._testing.getPendingRelaxWindows(), 0);
 });
 
 test("autoscaler clears a pending relax if load rises back to the current factor", () => {
-  const calls = [];
-  const options = buildOptions(calls);
+  const options = buildOptions();
 
-  tidiAutoscaler._testing.evaluateMeasuredCpuPercent(100, options);
-  tidiAutoscaler._testing.evaluateMeasuredCpuPercent(55, options);
+  tidiAutoscaler._testing.evaluateWindowMetrics(buildMetrics(0.1), options);
+  tidiAutoscaler._testing.evaluateWindowMetrics(buildMetrics(1.0), options);
 
-  const stableAtCurrentFactor = tidiAutoscaler._testing.evaluateMeasuredCpuPercent(
-    100,
+  const stableAtCurrentFactor = tidiAutoscaler._testing.evaluateWindowMetrics(
+    buildMetrics(0.1),
     options,
   );
   assert.equal(stableAtCurrentFactor.changed, false);
   assert.equal(stableAtCurrentFactor.reason, "stable");
   assert.equal(stableAtCurrentFactor.targetFactor, 0.1);
-  assert.equal(tidiAutoscaler._testing.getPendingRelaxPolls(), 0);
+  assert.equal(tidiAutoscaler._testing.getPendingRelaxWindows(), 0);
   assert.equal(tidiAutoscaler._testing.getPendingRelaxFactor(), null);
 
-  const nextRelaxAttempt = tidiAutoscaler._testing.evaluateMeasuredCpuPercent(
-    55,
+  const nextRelaxAttempt = tidiAutoscaler._testing.evaluateWindowMetrics(
+    buildMetrics(1.0),
     options,
   );
   assert.equal(nextRelaxAttempt.changed, false);
   assert.equal(nextRelaxAttempt.reason, "await-relax-confirmation");
   assert.equal(nextRelaxAttempt.targetFactor, 1.0);
-  assert.equal(tidiAutoscaler._testing.getPendingRelaxPolls(), 1);
+  assert.equal(tidiAutoscaler._testing.getPendingRelaxWindows(), 1);
   assert.equal(tidiAutoscaler._testing.getPendingRelaxFactor(), 1.0);
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls.at(-1), { systemIDs: [30000142], factor: 0.1 });
 });

@@ -828,15 +828,24 @@ function Check-StepStatuses {
             }
         } catch {}
 
-        # Check if CA PEM is in at least one client cacert.pem bundle
+        # Check every client cacert.pem bundle. XMPP uses bin:/packages/certifi/cacert.pem.
         $caContent = ([System.IO.File]::ReadAllText($caCertPem)).Trim()
-        $bundlePaths = @(
+        $fixedBundlePaths = @(
             (Join-Path $script:TqPath "bin64\cacert.pem"),
             (Join-Path $script:TqPath "bin64\packages\certifi\cacert.pem")
-        )
+        ) | Where-Object { Test-Path $_ }
+        $recursiveBundlePaths = @(Get-ChildItem -LiteralPath $script:TqPath -Recurse -Filter "cacert.pem" -File -ErrorAction SilentlyContinue |
+            ForEach-Object { $_.FullName })
+        $bundlePaths = @($fixedBundlePaths + $recursiveBundlePaths |
+            Where-Object { $_ } |
+            ForEach-Object { (Resolve-Path -LiteralPath $_).Path } |
+            Sort-Object -Unique)
+
+        $certInBundle = ($bundlePaths.Count -gt 0)
         foreach ($bp in $bundlePaths) {
-            if ((Test-Path $bp) -and ([System.IO.File]::ReadAllText($bp)).Contains($caContent)) {
-                $certInBundle = $true; break
+            if (-not ([System.IO.File]::ReadAllText($bp)).Contains($caContent)) {
+                $certInBundle = $false
+                break
             }
         }
     }

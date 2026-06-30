@@ -3,7 +3,7 @@
 
 [input]
 # Where the seeder reads EvEJS market/static data from.
-static_data_dir = "../../server/src/newDatabase/data"
+static_data_dir = "../../_local/newDatabase/data"
 
 [output]
 # Where the finished SQLite database gets written.

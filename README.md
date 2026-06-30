@@ -26,7 +26,7 @@ Fenris Creations.
 2. Make a separate copy of your EVE Online client.
 3. Run `SetupEveJS.bat`.
 4. Select your copied EVE client when the setup wizard asks for it.
-5. Let setup run `DatabaseCreator.bat` to build the complete local database.
+5. Let setup *automatically* run `DatabaseCreator.bat` to build the complete local database.
 6. Run `StartServer.bat`.
 7. Choose option `2` to start the server and launch the client.
 

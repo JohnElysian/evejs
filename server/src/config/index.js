@@ -22,7 +22,7 @@ const REMOVED_CONFIG_KEYS = new Set([
 const CONFIG_ENTRY_DEFINITIONS = [
   {
     key: "devAutoCreateAccounts",
-    defaultValue: false,
+    defaultValue: true,
     envVar: "EVEJS_DEV_AUTO_CREATE_ACCOUNTS",
     envType: "boolean",
     description:
@@ -31,7 +31,7 @@ const CONFIG_ENTRY_DEFINITIONS = [
   },
   {
     key: "devSkipPasswordValidation",
-    defaultValue: false,
+    defaultValue: true,
     envVar: "EVEJS_DEV_SKIP_PASSWORD_VALIDATION",
     envType: "boolean",
     description:
@@ -1763,7 +1763,7 @@ const CONFIG_ENTRY_DEFINITIONS = [
   },
   {
     key: "tidiAutoscaler",
-    defaultValue: true,
+    defaultValue: false,
     envVar: "EVEJS_TIDI_AUTOSCALER",
     envType: "boolean",
     description:

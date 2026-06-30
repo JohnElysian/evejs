@@ -187,7 +187,7 @@ function buildNameIndex(entries = {}) {
         continue;
       }
 
-      const numericID = toInt(entry.effectID ?? entry.attributeID, 0);
+      const numericID = toInt(entry.effectID ?? entry.attributeID ?? entry._key, 0);
       if (numericID > 0 && !byName.has(normalized)) {
         byName.set(normalized, numericID);
       }
@@ -373,10 +373,17 @@ function getSkillAttributeValue(typeID, ...names) {
 
 function getTypeDogmaEffects(typeID) {
   const record = getTypeDogmaRecord(typeID);
-  const effects = Array.isArray(record && record.effects) ? record.effects : [];
+  const effects = Array.isArray(record && record.effects)
+    ? record.effects
+    : Array.isArray(record && record.dogmaEffects)
+      ? record.dogmaEffects
+      : [];
   return new Set(
     effects
-      .map((effectID) => toInt(effectID, 0))
+      .map((effect) => toInt(
+        effect && typeof effect === "object" ? effect.effectID : effect,
+        0,
+      ))
       .filter((effectID) => effectID > 0),
   );
 }

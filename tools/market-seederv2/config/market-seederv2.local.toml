@@ -3,7 +3,7 @@
 
 [input]
 # Local Public EveJS authority data used for station, system, region, and type names.
-static_data_dir = "../../server/src/newDatabase/data"
+static_data_dir = "../../_local/newDatabase/data"
 
 [output]
 # The market daemon reads this same database path by default.

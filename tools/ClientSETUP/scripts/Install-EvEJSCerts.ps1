@@ -11,7 +11,9 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $caCertPath = Join-Path $repoRoot "server\certs\xmpp-ca-cert.pem"
 $caKeyPath = Join-Path $repoRoot "server\certs\xmpp-ca-key.pem"
 $builderScriptPath = Join-Path $PSScriptRoot "build-gateway-cert.js"
-$localCertsScriptPath = Join-Path $repoRoot "tools\LocalCerts\ensure-local-certs.js"
+$xmppCertDir = Join-Path $repoRoot "server\certs"
+$xmppCertPath = Join-Path $xmppCertDir "xmpp-dev-cert.pem"
+$xmppKeyPath = Join-Path $xmppCertDir "xmpp-dev-key.pem"
 $gatewayCertDir = Join-Path $repoRoot "server\src\_secondary\express\certs"
 $gatewayCertPath = Join-Path $gatewayCertDir "gateway-dev-cert.pem"
 $gatewayKeyPath = Join-Path $gatewayCertDir "gateway-dev-key.pem"
@@ -34,10 +36,19 @@ function Get-NodeCommand {
 }
 
 function Ensure-LocalCertificateFiles {
-  $nodeCommand = Get-NodeCommand
-  & $nodeCommand $localCertsScriptPath --repo-root $repoRoot
-  if ($LASTEXITCODE -ne 0) {
-    throw "Failed to create local EvEJS certificate files."
+  New-Item -ItemType Directory -Force -Path $xmppCertDir | Out-Null
+
+  if (Test-LeafNeedsRebuild `
+    -CertPath $xmppCertPath `
+    -KeyPath $xmppKeyPath `
+    -RequiredDnsNames @("localhost")) {
+    Invoke-CertificateBuilder `
+      -OutCertPath $xmppCertPath `
+      -OutKeyPath $xmppKeyPath `
+      -CommonName "localhost" `
+      -DnsNames @("localhost") `
+      -IpNames @("127.0.0.1")
+    Write-Step "Built CA-signed XMPP TLS cert under $xmppCertDir"
   }
 }
 
@@ -72,12 +83,20 @@ function Get-ClientBundlePaths {
     return @()
   }
 
-  return @(
+  $fixedPaths = @(
     (Join-Path $ResolvedClientPath "bin64\cacert.pem"),
     (Join-Path $ResolvedClientPath "bin64\packages\certifi\cacert.pem"),
     (Join-Path $ResolvedClientPath "bin\cacert.pem"),
     (Join-Path $ResolvedClientPath "bin\packages\certifi\cacert.pem")
   ) | Where-Object { Test-Path $_ }
+
+  $recursivePaths = @(Get-ChildItem -LiteralPath $ResolvedClientPath -Recurse -Filter "cacert.pem" -File -ErrorAction SilentlyContinue |
+    ForEach-Object { $_.FullName })
+
+  return @($fixedPaths + $recursivePaths |
+    Where-Object { $_ } |
+    ForEach-Object { (Resolve-Path -LiteralPath $_).Path } |
+    Sort-Object -Unique)
 }
 
 function Remove-PemBlockFromContent {
@@ -98,6 +117,71 @@ function Remove-PemBlockFromContent {
   return ($Content -replace [regex]::Escape($trimmedPem), "").TrimEnd() + "`r`n"
 }
 
+function Convert-PemBlockToCertificate {
+  param([string]$PemBlock)
+
+  $base64 = ($PemBlock `
+    -replace "-----BEGIN CERTIFICATE-----", "" `
+    -replace "-----END CERTIFICATE-----", "" `
+    -replace "\s", "")
+
+  if (-not $base64) {
+    return $null
+  }
+
+  try {
+    $bytes = [Convert]::FromBase64String($base64)
+    return New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList @(,$bytes)
+  } catch {
+    return $null
+  }
+}
+
+function Remove-EvEJSLocalCertificateBlocksFromContent {
+  param(
+    [string]$Content,
+    [string]$CurrentCaThumbprint
+  )
+
+  if (-not $Content) {
+    return ""
+  }
+
+  $regex = New-Object System.Text.RegularExpressions.Regex(
+    "-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----",
+    [System.Text.RegularExpressions.RegexOptions]::Multiline
+  )
+
+  $updated = $regex.Replace(
+    $Content,
+    [System.Text.RegularExpressions.MatchEvaluator]{
+      param($match)
+
+      $cert = Convert-PemBlockToCertificate -PemBlock $match.Value
+      if ($cert) {
+        $subject = [string]$cert.Subject
+        $issuer = [string]$cert.Issuer
+        $thumbprint = [string]$cert.Thumbprint
+        if (
+          $subject -like "*EvEJS Local*" -or
+          $issuer -like "*EvEJS Local*" -or
+          $subject -like "*eve.js Public Gateway TLS*" -or
+          $issuer -like "*eve.js Public Gateway TLS*"
+        ) {
+          if ($CurrentCaThumbprint -and $thumbprint -eq $CurrentCaThumbprint) {
+            return $match.Value
+          }
+          return ""
+        }
+      }
+
+      return $match.Value
+    }
+  )
+
+  return $updated.TrimEnd() + "`r`n"
+}
+
 function Ensure-PemBundleContainsCa {
   param(
     [string]$BundlePath,
@@ -105,12 +189,17 @@ function Ensure-PemBundleContainsCa {
     [string[]]$PemBlocksToRemove = @()
   )
 
-  $bundleRaw = Get-Content -Path $BundlePath -Raw
+  $bundleRaw = Get-Content -LiteralPath $BundlePath -Raw
   foreach ($pemBlock in $PemBlocksToRemove) {
     $bundleRaw = Remove-PemBlockFromContent -Content $bundleRaw -PemBlock $pemBlock
   }
 
-  $caRaw = (Get-Content -Path $PemCaPath -Raw).Trim()
+  $caRaw = (Get-Content -LiteralPath $PemCaPath -Raw).Trim()
+  $caCert = Get-PfxCertificate -FilePath $PemCaPath
+  $bundleRaw = Remove-EvEJSLocalCertificateBlocksFromContent `
+    -Content $bundleRaw `
+    -CurrentCaThumbprint $caCert.Thumbprint
+
   if ($bundleRaw.Contains($caRaw)) {
     $encoding = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($BundlePath, $bundleRaw, $encoding)
@@ -121,6 +210,10 @@ function Ensure-PemBundleContainsCa {
   $updated = $bundleRaw.TrimEnd() + "`r`n`r`n" + $caRaw + "`r`n"
   $encoding = New-Object System.Text.UTF8Encoding($false)
   [System.IO.File]::WriteAllText($BundlePath, $updated, $encoding)
+  $verifyRaw = Get-Content -LiteralPath $BundlePath -Raw
+  if (-not $verifyRaw.Contains($caRaw)) {
+    throw "Failed to verify EvEJS CA inside $BundlePath after writing."
+  }
   Write-Step "Appended CA to $BundlePath"
 }
 
@@ -128,6 +221,20 @@ function Ensure-RootTrust {
   param([string]$PemPath)
 
   $cert = Get-PfxCertificate -FilePath $PemPath
+  $staleCerts = @(Get-ChildItem Cert:\CurrentUser\Root -ErrorAction SilentlyContinue | Where-Object {
+    (
+      $_.Subject -like "*EvEJS Local*" -or
+      $_.Issuer -like "*EvEJS Local*"
+    ) -and $_.Thumbprint -ne $cert.Thumbprint
+  })
+
+  foreach ($staleCert in $staleCerts) {
+    Remove-Item -Path (Join-Path "Cert:\CurrentUser\Root" $staleCert.Thumbprint) -ErrorAction SilentlyContinue
+  }
+  if ($staleCerts.Count -gt 0) {
+    Write-Step "Removed $($staleCerts.Count) stale EvEJS CA certificate(s) from CurrentUser\Root."
+  }
+
   $existing = Get-ChildItem Cert:\CurrentUser\Root | Where-Object {
     $_.Thumbprint -eq $cert.Thumbprint
   }
@@ -154,18 +261,65 @@ function Remove-ExistingGatewayCerts {
   }
 }
 
-function Test-GatewayLeafNeedsRebuild {
-  param([string]$CertPath)
+function Test-LeafNeedsRebuild {
+  param(
+    [string]$CertPath,
+    [string]$KeyPath,
+    [string[]]$RequiredDnsNames
+  )
 
-  if (-not (Test-Path $CertPath)) {
+  if ((-not (Test-Path $CertPath)) -or (-not (Test-Path $KeyPath))) {
+    return $true
+  }
+  if ((-not (Test-Path $caCertPath)) -or (-not (Test-Path $caKeyPath))) {
     return $true
   }
 
   try {
     $cert = Get-PfxCertificate -FilePath $CertPath
-    return [string]::Equals($cert.Subject, $cert.Issuer, [System.StringComparison]::OrdinalIgnoreCase)
+    $caCert = Get-PfxCertificate -FilePath $caCertPath
+    if ([string]::Equals($cert.Subject, $cert.Issuer, [System.StringComparison]::OrdinalIgnoreCase)) {
+      return $true
+    }
+    if (-not [string]::Equals($cert.Issuer, $caCert.Subject, [System.StringComparison]::OrdinalIgnoreCase)) {
+      return $true
+    }
+
+    $dnsNames = @($cert.DnsNameList | ForEach-Object { $_.Unicode.ToLowerInvariant() })
+    foreach ($requiredName in $RequiredDnsNames) {
+      if ($dnsNames -notcontains $requiredName) {
+        return $true
+      }
+    }
+
+    return $false
   } catch {
     return $true
+  }
+}
+
+function Invoke-CertificateBuilder {
+  param(
+    [string]$OutCertPath,
+    [string]$OutKeyPath,
+    [string]$CommonName,
+    [string[]]$DnsNames,
+    [string[]]$IpNames
+  )
+
+  $nodeCommand = Get-NodeCommand
+  & $nodeCommand $builderScriptPath `
+    --ensure-ca `
+    --ca-cert $caCertPath `
+    --ca-key $caKeyPath `
+    --common-name $CommonName `
+    --dns ($DnsNames -join ",") `
+    --ip ($IpNames -join ",") `
+    --out-cert $OutCertPath `
+    --out-key $OutKeyPath
+
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to build local TLS certificate for $CommonName."
   }
 }
 
@@ -182,21 +336,20 @@ function Build-GatewayCertificate {
     Remove-Item -Path $gatewayCertPath, $gatewayKeyPath -Force -ErrorAction SilentlyContinue
   }
 
-  if ((Test-Path $gatewayCertPath) -and (Test-Path $gatewayKeyPath) -and (-not (Test-GatewayLeafNeedsRebuild -CertPath $gatewayCertPath))) {
+  if (-not (Test-LeafNeedsRebuild `
+    -CertPath $gatewayCertPath `
+    -KeyPath $gatewayKeyPath `
+    -RequiredDnsNames @("dev-public-gateway.evetech.net", "public-gateway.evetech.net", "localhost"))) {
     Write-Step "Gateway TLS files already exist."
     return $previousLeafPem
   }
 
-  $nodeCommand = Get-NodeCommand
-  & $nodeCommand $builderScriptPath `
-    --ca-cert $caCertPath `
-    --ca-key $caKeyPath `
-    --out-cert $gatewayCertPath `
-    --out-key $gatewayKeyPath
-
-  if ($LASTEXITCODE -ne 0) {
-    throw "Failed to build gateway TLS certificate."
-  }
+  Invoke-CertificateBuilder `
+    -OutCertPath $gatewayCertPath `
+    -OutKeyPath $gatewayKeyPath `
+    -CommonName "dev-public-gateway.evetech.net" `
+    -DnsNames @("dev-public-gateway.evetech.net", "public-gateway.evetech.net", "localhost") `
+    -IpNames @("127.0.0.1")
 
   Write-Step "Built CA-signed public-gateway TLS cert under $gatewayCertDir"
   return $previousLeafPem

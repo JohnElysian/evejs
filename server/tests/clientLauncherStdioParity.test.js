@@ -22,12 +22,18 @@ test("Play launchers bind client stdio to stable non-device sinks", () => {
   assert.match(playBat, /"%CLIENT_EXE%"\s+1>>"%EVEJS_CLIENT_STDIO_LOG%"\s+2>&1/i);
   assert.match(playBat, /set "EO_REMOTEFILECACHEFOLDER=%EVEJS_CLIENT_RESFILES%"/i);
   assert.match(playBat, /echo\s+ResFiles:\s+%EO_REMOTEFILECACHEFOLDER%/i);
+  assert.match(playBat, /call :EnsureClientCertificateTrust/i);
+  assert.match(playBat, /Install-EvEJSCerts\.ps1/i);
+  assert.match(playBat, /-ClientPath "%EVEJS_CLIENT_PATH%"/i);
   assert.match(playBat, /EVEJS_PROXY_BLOCKED_HOSTS=api\.ipify\.org,sentry\.io,\.sentry\.io,.*launchdarkly\.com,\.launchdarkly\.com/i);
   assert.match(playBat, /if "%EVEJS_DRY_RUN%"=="1"/i);
   assert.match(playDebugBat, /"%CLIENT_EXE%"\s+\/console/i);
   assert.doesNotMatch(playDebugBat, /^"%CLIENT_EXE%"\s+\/console\s+.*(?:1>|2>)/im);
   assert.match(playDebugBat, /set "EO_REMOTEFILECACHEFOLDER=%EVEJS_CLIENT_RESFILES%"/i);
   assert.match(playDebugBat, /echo\s+ResFiles:\s+%EO_REMOTEFILECACHEFOLDER%/i);
+  assert.match(playDebugBat, /call :EnsureClientCertificateTrust/i);
+  assert.match(playDebugBat, /Install-EvEJSCerts\.ps1/i);
+  assert.match(playDebugBat, /-ClientPath "%EVEJS_CLIENT_PATH%"/i);
   assert.match(playDebugBat, /EVEJS_PROXY_BLOCKED_HOSTS=api\.ipify\.org,sentry\.io,\.sentry\.io,.*launchdarkly\.com,\.launchdarkly\.com/i);
 
   if (runClientProxyBat) {

@@ -18,7 +18,7 @@ The tool fetches the latest EVE Ref market snapshot, prints the snapshot file
 time and the order-page timestamp range, asks before replacing an existing
 database, and writes:
 
-- static region/system/station/type tables from `server/src/newDatabase/data`
+- static region/system/station/type tables from `_local/newDatabase/data`
 - every TQ station buy/sell order whose type exists in Public EveJS itemTypes
   through the compatibility importer
 - TQ sell liquidity into `seed_stock`
