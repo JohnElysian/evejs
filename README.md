@@ -11,6 +11,10 @@
 [![Setup](https://img.shields.io/badge/Setup-One--Click-success)](#quick-start)
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/KMuJrMDEBa)
 
+Note: This GitHub is V9 of Eve.JS. There are incredible updates available on the discord.
+No support is given for this repo.
+
+
 </div>
 
 EvEJS lets you run a local research server against your own copied EVE Online
