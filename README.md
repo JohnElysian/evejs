@@ -18,7 +18,7 @@ You can find these on discord!
 
 this repo wont be updated -- or supported! 
 However, it is working for what it is!
-you can fight rats, mine, time dilation, try out all the ships, explore the universe :)
+you can fight rats, mine, time dilation, full market, try out all the ships, explore the universe :)
 
 thank you to Icey, deer_hunter & myself for this project existing today :)
 
