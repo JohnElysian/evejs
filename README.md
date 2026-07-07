@@ -11,8 +11,17 @@
 [![Setup](https://img.shields.io/badge/Setup-One--Click-success)](#quick-start)
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/KMuJrMDEBa)
 
-Note: This GitHub is V9 of Eve.JS. There are incredible updates available on the discord.
-No support is given for this repo.
+Note: This GitHub is V9 of Eve.JS. i'm proud of it.
+
+a lovely guy named Farmer has started updating eve.js, presently at V11,
+You can find these on discord!
+
+this repo wont be updated -- or supported! However, is fully working.
+you can fight rats, mine, try out all the ships, explore the universe :)
+
+thank you to Icey, deer_hunter & myself for this project existing today :)
+Note: CCP have issued a DMCA against eve.js before, this repo may vanish at any time.
+
 
 
 </div>
