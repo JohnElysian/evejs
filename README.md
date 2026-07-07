@@ -13,14 +13,16 @@
 
 Note: This GitHub is V9 of Eve.JS. i'm proud of it.
 
-a lovely guy named Farmer has started updating eve.js, presently at V11,
+A hero/lovely guy named Farmer has started updating eve.js, presently at V11,
 You can find these on discord!
 
-this repo wont be updated -- or supported! However, is fully working.
-you can fight rats, mine, try out all the ships, explore the universe :)
+this repo wont be updated -- or supported! 
+However, it is working for what it is!
+you can fight rats, mine, time dilation, try out all the ships, explore the universe :)
 
 thank you to Icey, deer_hunter & myself for this project existing today :)
-Note: CCP have issued a DMCA against eve.js before, this repo may vanish at any time.
+
+CCP have issued a DMCA against eve.js before, this repo may vanish at any time.
 
 
 
