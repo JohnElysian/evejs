@@ -18,14 +18,25 @@ test("Play launchers bind client stdio to stable non-device sinks", () => {
   const playDebugBat = readRepoFile("PlayDebug.bat");
   const runClientProxyBat = readRepoFileIfPresent("scripts", "windows", "RunClientProxy.bat");
 
-  assert.match(playBat, /EVEJS_CLIENT_STDIO_LOG=%TEMP%\\evejs-client-stdout-/i);
+  assert.match(playBat, /EVEJS_CLIENT_STDIO_LOG=.*evejs-client-stdout-/i);
   assert.match(playBat, /"%CLIENT_EXE%"\s+1>>"%EVEJS_CLIENT_STDIO_LOG%"\s+2>&1/i);
   assert.match(playBat, /set "EO_REMOTEFILECACHEFOLDER=%EVEJS_CLIENT_RESFILES%"/i);
   assert.match(playBat, /echo\s+ResFiles:\s+%EO_REMOTEFILECACHEFOLDER%/i);
   assert.match(playBat, /call :EnsureClientCertificateTrust/i);
   assert.match(playBat, /Install-EvEJSCerts\.ps1/i);
   assert.match(playBat, /-ClientPath "%EVEJS_CLIENT_PATH%"/i);
-  assert.match(playBat, /EVEJS_PROXY_BLOCKED_HOSTS=api\.ipify\.org,sentry\.io,\.sentry\.io,.*launchdarkly\.com,\.launchdarkly\.com/i);
+  assert.match(playBat, /EVEJS_DARKLY_BLOCK_HOSTS=.*launchdarkly\.com,\.launchdarkly\.com/i);
+  assert.match(playBat, /EVEJS_PROXY_BLOCKED_HOSTS=!EVEJS_PROXY_BLOCKED_HOSTS!,!EVEJS_DARKLY_BLOCK_HOSTS!/i);
+  assert.match(playBat, /Darkly:\s+blocked by launcher network policy/i);
+  assert.match(playBat, /set "SSL_CERT_FILE=%EVEJS_CA_PEM%"/i);
+  assert.match(playBat, /set "LAUNCHDARKLY_OFFLINE=true"/i);
+  assert.match(playBat, /mobile\.launchdarkly\.com/i);
+  assert.match(playBat, /if\(-not \(Test-Path -LiteralPath \$f\)\)/);
+  assert.doesNotMatch(playBat, /if\(!/);
+  assert.match(playBat, /Recent Windows System stability events/i);
+  assert.match(playBat, /SafeGraphics:\s+%EVEJS_CLIENT_SAFE_GRAPHICS%/i);
+  assert.match(playBat, /set "EVEJS_LAUNCH_DIAG=%EVEJS_DIAGNOSTICS_DIR%\\evejs-launch-diagnostics-/i);
+  assert.doesNotMatch(playBat, /set "EVEJS_LAUNCH_DIAG=%TEMP%\\evejs-launch-diagnostics-/i);
   assert.match(playBat, /if "%EVEJS_DRY_RUN%"=="1"/i);
   assert.match(playDebugBat, /"%CLIENT_EXE%"\s+\/console/i);
   assert.doesNotMatch(playDebugBat, /^"%CLIENT_EXE%"\s+\/console\s+.*(?:1>|2>)/im);
@@ -34,7 +45,18 @@ test("Play launchers bind client stdio to stable non-device sinks", () => {
   assert.match(playDebugBat, /call :EnsureClientCertificateTrust/i);
   assert.match(playDebugBat, /Install-EvEJSCerts\.ps1/i);
   assert.match(playDebugBat, /-ClientPath "%EVEJS_CLIENT_PATH%"/i);
-  assert.match(playDebugBat, /EVEJS_PROXY_BLOCKED_HOSTS=api\.ipify\.org,sentry\.io,\.sentry\.io,.*launchdarkly\.com,\.launchdarkly\.com/i);
+  assert.match(playDebugBat, /EVEJS_DARKLY_BLOCK_HOSTS=.*launchdarkly\.com,\.launchdarkly\.com/i);
+  assert.match(playDebugBat, /EVEJS_PROXY_BLOCKED_HOSTS=!EVEJS_PROXY_BLOCKED_HOSTS!,!EVEJS_DARKLY_BLOCK_HOSTS!/i);
+  assert.match(playDebugBat, /Darkly:\s+blocked by launcher network policy/i);
+  assert.match(playDebugBat, /set "SSL_CERT_FILE=%EVEJS_CA_PEM%"/i);
+  assert.match(playDebugBat, /set "LAUNCHDARKLY_OFFLINE=true"/i);
+  assert.match(playDebugBat, /mobile\.launchdarkly\.com/i);
+  assert.match(playDebugBat, /if\(-not \(Test-Path -LiteralPath \$f\)\)/);
+  assert.doesNotMatch(playDebugBat, /if\(!/);
+  assert.match(playDebugBat, /Recent Windows System stability events/i);
+  assert.match(playDebugBat, /SafeGraphics:\s+%EVEJS_CLIENT_SAFE_GRAPHICS%/i);
+  assert.match(playDebugBat, /set "EVEJS_LAUNCH_DIAG=%EVEJS_DIAGNOSTICS_DIR%\\evejs-launch-diagnostics-/i);
+  assert.doesNotMatch(playDebugBat, /set "EVEJS_LAUNCH_DIAG=%TEMP%\\evejs-launch-diagnostics-/i);
 
   if (runClientProxyBat) {
     assert.match(runClientProxyBat, /EVEJS_CLIENT_STDIO_LOG=%TEMP%\\evejs-client-stdout-/i);

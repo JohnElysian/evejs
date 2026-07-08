@@ -120,6 +120,62 @@ function Find-TqPath([string]$Dir) {
     return $null
 }
 
+function Test-ClientResourceCache {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$TqPath
+    )
+
+    $cacheRoot = Split-Path -Parent $TqPath
+    $resFiles = Join-Path $cacheRoot "ResFiles"
+    $indexFile = Join-Path $cacheRoot "index_tranquility.txt"
+
+    $result = [pscustomobject]@{
+        Ok = $false
+        CacheRoot = $cacheRoot
+        ResFiles = $resFiles
+        IndexFile = $indexFile
+        Message = ""
+    }
+
+    if (-not (Test-Path -LiteralPath $resFiles -PathType Container)) {
+        $result.Message = "ResFiles is missing. Copy the full EVE/shared-cache folder, not just EVE\tq."
+        return $result
+    }
+
+    if (-not (Test-Path -LiteralPath $indexFile -PathType Leaf)) {
+        $result.Message = "index_tranquility.txt is missing beside ResFiles. Copy the full EVE/shared-cache folder."
+        return $result
+    }
+
+    $hexDirs = @(Get-ChildItem -LiteralPath $resFiles -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^[0-9a-fA-F]{2}$' })
+    if ($hexDirs.Count -lt 240) {
+        $result.Message = "ResFiles exists but does not look like a full EVE asset cache."
+        return $result
+    }
+
+    $sampleCount = 0
+    try {
+        foreach ($file in [System.IO.Directory]::EnumerateFiles($resFiles, "*", [System.IO.SearchOption]::AllDirectories)) {
+            $sampleCount++
+            if ($sampleCount -ge 50000) { break }
+        }
+    } catch {
+        $result.Message = "ResFiles could not be scanned: $($_.Exception.Message)"
+        return $result
+    }
+
+    if ($sampleCount -lt 50000) {
+        $result.Message = "ResFiles is present but too small/incomplete for the EVE client."
+        return $result
+    }
+
+    $result.Ok = $true
+    $result.Message = "Resource cache found."
+    return $result
+}
+
 function Get-IniKeyPattern([string[]]$Keys) {
     $escapedKeys = $Keys | ForEach-Object { [regex]::Escape($_) }
     return '^\s*(?:' + ($escapedKeys -join '|') + ')\s*='
@@ -298,6 +354,54 @@ function Get-BlueDllPatchRecipe {
     return $script:BlueDllPatchRecipe
 }
 
+function ConvertTo-ProcessArgument {
+    param(
+        [AllowNull()]
+        [string]$Argument
+    )
+
+    if ($null -eq $Argument -or $Argument.Length -eq 0) {
+        return '""'
+    }
+
+    if ($Argument -notmatch '[\s"]') {
+        return $Argument
+    }
+
+    $quoted = New-Object System.Text.StringBuilder
+    [void]$quoted.Append('"')
+    $backslashCount = 0
+
+    foreach ($ch in $Argument.ToCharArray()) {
+        if ($ch -eq '\') {
+            $backslashCount++
+            continue
+        }
+
+        if ($ch -eq '"') {
+            if ($backslashCount -gt 0) {
+                [void]$quoted.Append(('\' * ($backslashCount * 2)))
+                $backslashCount = 0
+            }
+            [void]$quoted.Append('\"')
+            continue
+        }
+
+        if ($backslashCount -gt 0) {
+            [void]$quoted.Append(('\' * $backslashCount))
+            $backslashCount = 0
+        }
+        [void]$quoted.Append($ch)
+    }
+
+    if ($backslashCount -gt 0) {
+        [void]$quoted.Append(('\' * ($backslashCount * 2)))
+    }
+
+    [void]$quoted.Append('"')
+    return $quoted.ToString()
+}
+
 function Invoke-BlueDllPatchHelper {
     param(
         [string[]]$Arguments
@@ -309,13 +413,14 @@ function Invoke-BlueDllPatchHelper {
         "-ExecutionPolicy", "Bypass",
         "-File", $BlueDllPatchCli
     ) + $Arguments
+    $helperArgumentLine = ($helperArgs | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join " "
 
     $stdoutPath = Join-Path $env:TEMP ("evejs-blue-patch-stdout-{0}.log" -f ([guid]::NewGuid().ToString("N")))
     $stderrPath = Join-Path $env:TEMP ("evejs-blue-patch-stderr-{0}.log" -f ([guid]::NewGuid().ToString("N")))
 
     try {
         $process = Start-Process -FilePath $powershellExe `
-            -ArgumentList $helperArgs `
+            -ArgumentList $helperArgumentLine `
             -Wait `
             -PassThru `
             -NoNewWindow `
@@ -572,7 +677,9 @@ function Enable-StepButtons([bool]$On) {
                             is installed.  You can select the folder that
                             contains "EVE\tq\bin64\exefile.exe", or any parent
                             above it &#x2014; we will auto-detect the right
-                            subfolder for you.</TextBlock>
+                            subfolder for you.  The copied client must also
+                            include the sibling ResFiles folder and
+                            index_tranquility.txt.</TextBlock>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -953,9 +1060,20 @@ function Invoke-ClientSelection([string]$Path) {
         return
     }
 
+    $cacheCheck = Test-ClientResourceCache -TqPath $tq
+    if (-not $cacheCheck.Ok) {
+        Set-Status $lblStep1Status ("Client executable found, but the asset cache is incomplete.`n" +
+            "$($cacheCheck.Message)`nExpected:`n  $($cacheCheck.ResFiles)`n  $($cacheCheck.IndexFile)") $C_RED
+        $pnlBuildWarning.Visibility = "Collapsed"
+        $script:StepDone[1] = $false
+        Enable-StepButtons $false
+        Update-Progress
+        return
+    }
+
     # Build comparison
     if ($script:BuildNumber -eq $REQUIRED_BUILD) {
-        Set-Status $lblStep1Status "Client found!  Build $($script:BuildNumber) -- correct version." $C_GREEN
+        Set-Status $lblStep1Status "Client found!  Build $($script:BuildNumber) -- correct version. ResFiles cache OK." $C_GREEN
         $pnlBuildWarning.Visibility = "Collapsed"
     } else {
         Set-Status $lblStep1Status "Client found, but build is $($script:BuildNumber) (expected $REQUIRED_BUILD)." $C_AMBER
