@@ -2,7 +2,7 @@
 
 This repository is intended to contain source code and local tooling only.
 
-It must not contain:
+It must & does not contain any of the follow:
 
 - EVE Online client files.
 - CCP/Fenris static data exports.
@@ -17,5 +17,3 @@ required local data on their own machine.
 This project is not affiliated with, endorsed by, or approved by CCP Games / Fenris Creations. EVE
 Online and related names, marks, assets, and data belong to their respective
 owners.
-
-This is not legal advice.
