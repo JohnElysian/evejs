@@ -5,7 +5,7 @@ protocol/gameplay preservation work.
 
 Do not use this project to:
 
-- Run any kind of server that is not on your local machine for testing purposes. We are really, really strong against this and will help no NO capacity.
+- Run any kind of server that is not on your local machine for testing purposes. We are really, really strongly against this and will help in no NO capacity.
 - Sell access, currency, items, characters, accounts, or services.
 - Distribute CCP/Fenris client files, assets, generated data, patched DLLs, or keys.
 - Misrepresent the project as official CCP/Fenris software.
