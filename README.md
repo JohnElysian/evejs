@@ -13,7 +13,7 @@
 
 Note: This GitHub is V9 of Eve.JS. i'm proud of it.
 
-A hero/lovely guy named Farmer has started updating eve.js, presently at V11,
+A hero/lovely guy named Farmer has started updating eve.js, presently at V12,
 You can find these on discord!
 
 this repo wont be updated -- or supported! 
