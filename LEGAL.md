@@ -14,6 +14,8 @@ It must & does not contain any of the following:
 Users must supply their own legally obtained EVE Online client and generate any
 required local data on their own machine.
 
+We will of course comply with any demands. We mean no harm to anyone.
+
 This project is not affiliated with, endorsed by, or approved by CCP Games / Fenris Creations. EVE
 Online and related names, marks, assets, and data belong to their respective
 owners.
