@@ -1772,7 +1772,7 @@ const CONFIG_ENTRY_DEFINITIONS = [
   },
   {
     key: "NewEdenSystemLoading",
-    defaultValue: 1,
+    defaultValue: 4,
     allowedValues: [1, 2, 3, 4],
     envVar: "EVEJS_NEW_EDEN_SYSTEM_LOADING",
     envType: "number",
