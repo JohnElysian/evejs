@@ -2,7 +2,7 @@
 
 This repository is intended to contain source code and local tooling only.
 
-It must & does not contain any of the follow:
+It must & does not contain any of the following:
 
 - EVE Online client files.
 - CCP/Fenris static data exports.
