@@ -14,9 +14,14 @@ set "MARKET_SEED_DIR=%EVEJS_REPO_ROOT%\tools\market-seed"
 set "MARKET_SERVER_DIR=%EVEJS_REPO_ROOT%\externalservices\market-server"
 set "VSWHERE_EXE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set "VS_INSTALLER_EXE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vs_installer.exe"
+set "WINDOWS_SDK_COMPONENT_PRIMARY=Microsoft.VisualStudio.Component.Windows11SDK.26100"
+set "WINDOWS_SDK_COMPONENT_FALLBACK1=Microsoft.VisualStudio.Component.Windows11SDK.22621"
+set "WINDOWS_SDK_COMPONENT_FALLBACK2=Microsoft.VisualStudio.Component.Windows10SDK.20348"
+set "WINDOWS_SDK_COMPONENT_FALLBACK3=Microsoft.VisualStudio.Component.Windows10SDK.19041"
 set "WINGET_EXE="
 set "VS_INSTALL_PATH="
 set "VCVARS64_BAT="
+set "EVEJS_KERNEL32_LIB="
 set "EVEJS_EXIT=0"
 
 call :EnsureAdmin
@@ -34,6 +39,7 @@ echo.
 echo     - Rust / cargo
 echo     - Visual Studio Build Tools C++ workload
 echo     - MSVC link.exe / cl.exe
+echo     - Windows SDK libraries such as kernel32.lib
 echo     - Cargo linker wrapper for normal double-clicked consoles
 echo.
 
@@ -163,29 +169,61 @@ exit /b 1
 :EnsureVisualCppBuildTools
 call :ResolveVisualCppInstall
 if not errorlevel 1 (
-  echo   Visual C++ Build Tools already installed:
-  echo       %VS_INSTALL_PATH%
-  exit /b 0
+  call :VerifyWindowsSdkLib
+  if not errorlevel 1 (
+    echo   Visual C++ Build Tools and Windows SDK already installed:
+    echo       %VS_INSTALL_PATH%
+    exit /b 0
+  )
+  echo.
+  echo   Visual C++ Build Tools are installed, but Windows SDK libraries
+  echo   are missing or not visible to the MSVC environment.
+  echo   Repairing the C++ workload so kernel32.lib is available...
+  echo   This can take several minutes. Visual Studio Installer is not very
+  echo   chatty here; the spinner may sit still while it downloads SDK payloads.
+  call :ModifyVisualStudioCppWorkload
+  if errorlevel 1 exit /b 1
+
+  call :ResolveVisualCppInstall
+  if not errorlevel 1 (
+    call :VerifyWindowsSdkLib
+    if not errorlevel 1 exit /b 0
+  )
+
+  echo.
+  echo   Direct repair did not expose kernel32.lib yet.
+  echo   Windows may need a restart, or the SDK install may still be pending.
+  exit /b 1
 )
 
-echo   Installing Visual Studio 2022 Build Tools with the C++ workload...
-"%WINGET_EXE%" install -e --id Microsoft.VisualStudio.2022.BuildTools --accept-package-agreements --accept-source-agreements --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+echo   Installing Visual Studio 2022 Build Tools with the C++ workload and Windows SDK...
+echo   This can take several minutes. Visual Studio Installer is not very
+echo   chatty here; the spinner may sit still while it downloads SDK payloads.
+"%WINGET_EXE%" install -e --id Microsoft.VisualStudio.2022.BuildTools --accept-package-agreements --accept-source-agreements --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add %WINDOWS_SDK_COMPONENT_PRIMARY% --includeRecommended"
 
 call :ResolveVisualCppInstall
-if not errorlevel 1 exit /b 0
+if not errorlevel 1 (
+  call :VerifyWindowsSdkLib
+  if not errorlevel 1 exit /b 0
+)
 
 echo.
 echo   Build Tools are installed or partially installed, but the C++ workload
-echo   was not detected yet. Attempting a direct Visual Studio Installer repair...
+echo   or Windows SDK library path was not detected yet. Attempting a direct
+echo   Visual Studio Installer repair...
 call :ModifyVisualStudioCppWorkload
 if errorlevel 1 exit /b 1
 
 call :ResolveVisualCppInstall
-if not errorlevel 1 exit /b 0
+if not errorlevel 1 (
+  call :VerifyWindowsSdkLib
+  if not errorlevel 1 exit /b 0
+)
 
 echo.
-echo   [!] Visual Studio C++ Build Tools could not be verified.
+echo   [!] Visual Studio C++ Build Tools and Windows SDK could not be verified.
 echo       Missing component: Microsoft.VisualStudio.Component.VC.Tools.x86.x64
+echo       Missing SDK lib:  kernel32.lib
 exit /b 1
 
 :ModifyVisualStudioCppWorkload
@@ -201,7 +239,25 @@ if errorlevel 1 (
   exit /b 1
 )
 
-"%VS_INSTALLER_EXE%" modify --installPath "%VS_INSTALL_PATH%" --quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended
+call :ModifyVisualStudioCppWorkloadWithSdk "%WINDOWS_SDK_COMPONENT_PRIMARY%"
+if not errorlevel 1 exit /b 0
+
+call :ModifyVisualStudioCppWorkloadWithSdk "%WINDOWS_SDK_COMPONENT_FALLBACK1%"
+if not errorlevel 1 exit /b 0
+
+call :ModifyVisualStudioCppWorkloadWithSdk "%WINDOWS_SDK_COMPONENT_FALLBACK2%"
+if not errorlevel 1 exit /b 0
+
+call :ModifyVisualStudioCppWorkloadWithSdk "%WINDOWS_SDK_COMPONENT_FALLBACK3%"
+if not errorlevel 1 exit /b 0
+
+echo   [!] Visual Studio Installer could not add a supported Windows SDK.
+exit /b 1
+
+:ModifyVisualStudioCppWorkloadWithSdk
+set "EVEJS_SDK_COMPONENT=%~1"
+echo   Repairing C++ workload with %EVEJS_SDK_COMPONENT%...
+"%VS_INSTALLER_EXE%" modify --installPath "%VS_INSTALL_PATH%" --quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add "%EVEJS_SDK_COMPONENT%" --includeRecommended
 if errorlevel 1 exit /b 1
 exit /b 0
 
@@ -264,11 +320,57 @@ if errorlevel 1 (
   exit /b 1
 )
 
+call :VerifyWindowsSdkLib
+if errorlevel 1 exit /b 1
+
 for /f "delims=" %%I in ('where link.exe 2^>nul') do (
   echo   MSVC linker: %%I
   goto LinkEchoDone
 )
 :LinkEchoDone
+exit /b 0
+
+:VerifyWindowsSdkLib
+set "EVEJS_KERNEL32_LIB="
+if not defined VCVARS64_BAT (
+  call :ResolveVisualCppInstall
+  if errorlevel 1 exit /b 1
+)
+
+call "%VCVARS64_BAT%" >nul
+if errorlevel 1 (
+  echo   [!] Failed to initialize the Visual C++ build environment:
+  echo       %VCVARS64_BAT%
+  exit /b 1
+)
+
+for %%P in ("%LIB:;=" "%") do (
+  if exist "%%~P\kernel32.lib" (
+    set "EVEJS_KERNEL32_LIB=%%~P\kernel32.lib"
+    goto Kernel32Found
+  )
+)
+
+for /f "delims=" %%I in ('dir /b /s "%ProgramFiles(x86)%\Windows Kits\10\Lib\kernel32.lib" "%ProgramFiles(x86)%\Windows Kits\10\Lib\*\um\x64\kernel32.lib" 2^>nul') do (
+  set "EVEJS_KERNEL32_LIB=%%I"
+  goto Kernel32FoundButNotInLib
+)
+
+echo   [!] Windows SDK library kernel32.lib was not found.
+echo       Rust found MSVC link.exe, but Windows SDK libs are missing.
+echo       Install/repair Visual Studio Build Tools with a Windows 10/11 SDK,
+echo       then restart Windows if the installer asks.
+exit /b 1
+
+:Kernel32FoundButNotInLib
+echo   [!] Windows SDK kernel32.lib exists, but vcvars64.bat did not add it to LIB:
+echo       %EVEJS_KERNEL32_LIB%
+echo       This usually means the Visual Studio environment is half-installed
+echo       or Windows needs a restart after Build Tools setup.
+exit /b 1
+
+:Kernel32Found
+echo   Windows SDK lib: %EVEJS_KERNEL32_LIB%
 exit /b 0
 
 :WriteCargoMsvcLinkWrapper
@@ -380,7 +482,8 @@ popd
 if not "%EVEJS_EXIT%"=="0" (
   echo.
   echo   [!] Market seed compile verification failed.
-  echo       This usually means Windows still cannot see the MSVC linker.
+  echo       This usually means Windows still cannot see the MSVC linker
+  echo       or Windows SDK libraries such as kernel32.lib.
   exit /b 1
 )
 
