@@ -4,13 +4,11 @@ title EvEJS - Start Market Server
 
 for %%I in ("%~dp0.") do set "EVEJS_REPO_ROOT=%%~fI"
 set "MARKET_SERVER_DIR=%EVEJS_REPO_ROOT%\externalservices\market-server"
+set "MARKET_COMMON_DIR=%MARKET_SERVER_DIR%\crates\market-common"
 set "MARKET_SERVER_CONFIG=%MARKET_SERVER_DIR%\config\market-server.local.toml"
 set "MARKET_SERVER_PS=%MARKET_SERVER_DIR%\StartMarketServer.ps1"
 set "MARKET_SEED_LAUNCHER=%EVEJS_REPO_ROOT%\BuildMarketSeed.bat"
 set "POWERSHELL_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
-
-call :ResolveCargo
-if errorlevel 1 exit /b 1
 
 if not exist "%MARKET_SERVER_DIR%\Cargo.toml" (
   echo.
@@ -19,6 +17,12 @@ if not exist "%MARKET_SERVER_DIR%\Cargo.toml" (
   pause
   exit /b 1
 )
+
+call :RequireMarketCommon
+if errorlevel 1 exit /b 1
+
+call :ResolveCargo
+if errorlevel 1 exit /b 1
 
 echo.
 echo   ============================================================
@@ -124,6 +128,27 @@ echo   [!] Rust cargo.exe was not found.
 echo       Run scripts\InstallRustForMarket.bat
 echo       or install Rust manually with:
 echo       winget install -e --id Rustlang.Rustup
+echo.
+pause
+exit /b 1
+
+:RequireMarketCommon
+if exist "%MARKET_COMMON_DIR%\Cargo.toml" if exist "%MARKET_COMMON_DIR%\src\lib.rs" exit /b 0
+echo.
+echo   [!] This EveJS folder is missing required market source files.
+echo.
+echo       Expected:
+echo       %MARKET_COMMON_DIR%\Cargo.toml
+echo       %MARKET_COMMON_DIR%\src\lib.rs
+echo.
+echo       This is not a Rust/MSVC installer problem. The EveJS package is
+echo       incomplete, old, or was merged into an existing folder.
+echo.
+echo       Fix:
+echo         1. Download the latest full EveJS release zip.
+echo         2. Extract it into a fresh empty folder.
+echo         3. Run tools\InstallRustForMarket.bat again if needed.
+echo         4. Run BuildMarketSeed.bat again.
 echo.
 pause
 exit /b 1

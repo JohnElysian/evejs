@@ -5,10 +5,8 @@ title EvEJS - Build Market Seed
 for %%I in ("%~dp0..\..") do set "EVEJS_REPO_ROOT=%%~fI"
 set "MARKET_SEED_DIR=%EVEJS_REPO_ROOT%\tools\market-seed"
 set "MARKET_SEED_CONFIG=%MARKET_SEED_DIR%\config\market-seed.local.toml"
+set "MARKET_COMMON_DIR=%EVEJS_REPO_ROOT%\externalservices\market-server\crates\market-common"
 set "EVEJS_NEWDB_DATA_DIR=%EVEJS_REPO_ROOT%\_local\newDatabase\data"
-
-call :ResolveCargo
-if errorlevel 1 exit /b 1
 
 if not exist "%MARKET_SEED_DIR%\Cargo.toml" (
   echo.
@@ -17,6 +15,12 @@ if not exist "%MARKET_SEED_DIR%\Cargo.toml" (
   pause
   exit /b 1
 )
+
+call :RequireMarketCommon
+if errorlevel 1 exit /b 1
+
+call :ResolveCargo
+if errorlevel 1 exit /b 1
 
 if /i "%~1"=="full" goto FullBuild
 if /i "%~1"=="jita" goto JitaNewCaldari
@@ -192,6 +196,27 @@ if errorlevel 1 (
 if exist "%EVEJS_NEWDB_DATA_DIR%\stations\data.json" if exist "%EVEJS_NEWDB_DATA_DIR%\solarSystems\data.json" if exist "%EVEJS_NEWDB_DATA_DIR%\itemTypes\data.json" exit /b 0
 echo.
 echo   [ERROR] DatabaseCreator.bat completed, but required generated market inputs are still missing.
+echo.
+pause
+exit /b 1
+
+:RequireMarketCommon
+if exist "%MARKET_COMMON_DIR%\Cargo.toml" if exist "%MARKET_COMMON_DIR%\src\lib.rs" exit /b 0
+echo.
+echo   [!] This EveJS folder is missing required market source files.
+echo.
+echo       Expected:
+echo       %MARKET_COMMON_DIR%\Cargo.toml
+echo       %MARKET_COMMON_DIR%\src\lib.rs
+echo.
+echo       This is not a Rust/MSVC installer problem. The EveJS package is
+echo       incomplete, old, or was merged into an existing folder.
+echo.
+echo       Fix:
+echo         1. Download the latest full EveJS release zip.
+echo         2. Extract it into a fresh empty folder.
+echo         3. Run tools\InstallRustForMarket.bat again if needed.
+echo         4. Run BuildMarketSeed.bat again.
 echo.
 pause
 exit /b 1
