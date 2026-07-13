@@ -145,14 +145,10 @@ for /f "usebackq delims=" %%I in (`"%VSWHERE_EXE%" -latest -products * -requires
   set "VS_INSTALL_PATH=%%I"
 )
 
-if defined VS_INSTALL_PATH (
-  if exist "%VS_INSTALL_PATH%\VC\Auxiliary\Build\vcvars64.bat" (
-    set "VCVARS64_BAT=%VS_INSTALL_PATH%\VC\Auxiliary\Build\vcvars64.bat"
-    exit /b 0
-  )
-)
-
-exit /b 1
+if not defined VS_INSTALL_PATH exit /b 1
+if not exist "%VS_INSTALL_PATH%\VC\Auxiliary\Build\vcvars64.bat" exit /b 1
+set "VCVARS64_BAT=%VS_INSTALL_PATH%\VC\Auxiliary\Build\vcvars64.bat"
+exit /b 0
 
 :ResolveAnyVisualStudioInstall
 set "VS_INSTALL_PATH="
@@ -227,11 +223,12 @@ echo       Missing SDK lib:  kernel32.lib
 exit /b 1
 
 :ModifyVisualStudioCppWorkload
-if not exist "%VS_INSTALLER_EXE%" (
-  echo   [!] Visual Studio Installer was not found:
-  echo       %VS_INSTALLER_EXE%
-  exit /b 1
-)
+if exist "%VS_INSTALLER_EXE%" goto VisualStudioInstallerFound
+echo   [!] Visual Studio Installer was not found:
+echo       %VS_INSTALLER_EXE%
+exit /b 1
+
+:VisualStudioInstallerFound
 
 call :ResolveAnyVisualStudioInstall
 if errorlevel 1 (
@@ -351,16 +348,28 @@ for %%P in ("%LIB:;=" "%") do (
   )
 )
 
-for /f "delims=" %%I in ('dir /b /s "%ProgramFiles(x86)%\Windows Kits\10\Lib\kernel32.lib" "%ProgramFiles(x86)%\Windows Kits\10\Lib\*\um\x64\kernel32.lib" 2^>nul') do (
-  set "EVEJS_KERNEL32_LIB=%%I"
-  goto Kernel32FoundButNotInLib
-)
+call :FindKernel32InSdkRoot "%ProgramFiles(x86)%\Windows Kits\10\Lib"
+if defined EVEJS_KERNEL32_LIB goto Kernel32FoundButNotInLib
+call :FindKernel32InSdkRoot "%ProgramFiles%\Windows Kits\10\Lib"
+if defined EVEJS_KERNEL32_LIB goto Kernel32FoundButNotInLib
 
 echo   [!] Windows SDK library kernel32.lib was not found.
 echo       Rust found MSVC link.exe, but Windows SDK libs are missing.
 echo       Install/repair Visual Studio Build Tools with a Windows 10/11 SDK,
 echo       then restart Windows if the installer asks.
 exit /b 1
+
+:FindKernel32InSdkRoot
+set "EVEJS_SDK_LIB_ROOT=%~1"
+if not defined EVEJS_SDK_LIB_ROOT exit /b 0
+if not exist "%EVEJS_SDK_LIB_ROOT%" exit /b 0
+for /d %%V in ("%EVEJS_SDK_LIB_ROOT%\*") do (
+  if exist "%%~fV\um\x64\kernel32.lib" (
+    set "EVEJS_KERNEL32_LIB=%%~fV\um\x64\kernel32.lib"
+    exit /b 0
+  )
+)
+exit /b 0
 
 :Kernel32FoundButNotInLib
 echo   [!] Windows SDK kernel32.lib exists, but vcvars64.bat did not add it to LIB:
