@@ -107,6 +107,10 @@ echo     - Cargo linker wrapper for normal double-clicked consoles
 echo.
 exit /b 0
 
+:EchoIndentedValue
+echo       %~1
+exit /b 0
+
 :AlreadyReady
 echo   Existing Rust/MSVC market build stack is already ready.
 echo.
@@ -199,24 +203,33 @@ if not "%errorlevel%"=="0" (
 exit /b 2
 
 :ResolveWinget
-if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe" (
-  set "WINGET_EXE=%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe"
-  exit /b 0
-)
+if not exist "%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe" goto ResolveWingetFromPath
+set "WINGET_EXE=%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe"
+exit /b 0
 
-for /f "delims=" %%I in ('where winget 2^>nul') do (
-  set "WINGET_EXE=%%I"
-  exit /b 0
-)
+:ResolveWingetFromPath
+set "EVEJS_WHERE_RESULT=%TEMP%\evejs-where-winget-%RANDOM%-%RANDOM%.txt"
+where winget > "%EVEJS_WHERE_RESULT%" 2>nul
+if errorlevel 1 goto ResolveWingetFailed
+set /p WINGET_EXE=< "%EVEJS_WHERE_RESULT%"
+del "%EVEJS_WHERE_RESULT%" >nul 2>&1
+if defined WINGET_EXE exit /b 0
 
+:ResolveWingetFailed
+del "%EVEJS_WHERE_RESULT%" >nul 2>&1
 exit /b 1
 
 :ResolveVsWhere
 if exist "%VSWHERE_EXE%" exit /b 0
-for /f "delims=" %%I in ('where vswhere 2^>nul') do (
-  set "VSWHERE_EXE=%%I"
-  exit /b 0
-)
+set "EVEJS_WHERE_RESULT=%TEMP%\evejs-where-vswhere-%RANDOM%-%RANDOM%.txt"
+where vswhere > "%EVEJS_WHERE_RESULT%" 2>nul
+if errorlevel 1 goto ResolveVsWhereFailed
+set /p VSWHERE_EXE=< "%EVEJS_WHERE_RESULT%"
+del "%EVEJS_WHERE_RESULT%" >nul 2>&1
+if defined VSWHERE_EXE exit /b 0
+
+:ResolveVsWhereFailed
+del "%EVEJS_WHERE_RESULT%" >nul 2>&1
 exit /b 1
 
 :ResolveVisualCppInstall
@@ -225,9 +238,8 @@ set "VCVARS64_BAT="
 call :ResolveVsWhere
 if errorlevel 1 exit /b 1
 
-for /f "usebackq delims=" %%I in (`"%VSWHERE_EXE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2^>nul`) do (
-  set "VS_INSTALL_PATH=%%I"
-)
+call :QueryVisualStudioInstall "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+if errorlevel 1 exit /b 1
 
 if not defined VS_INSTALL_PATH exit /b 1
 if not exist "%VS_INSTALL_PATH%\VC\Auxiliary\Build\vcvars64.bat" exit /b 1
@@ -239,54 +251,73 @@ set "VS_INSTALL_PATH="
 call :ResolveVsWhere
 if errorlevel 1 exit /b 1
 
-for /f "usebackq delims=" %%I in (`"%VSWHERE_EXE%" -latest -products * -property installationPath 2^>nul`) do (
-  set "VS_INSTALL_PATH=%%I"
-)
+call :QueryVisualStudioInstall
+if errorlevel 1 exit /b 1
 
 if defined VS_INSTALL_PATH exit /b 0
 exit /b 1
 
+:QueryVisualStudioInstall
+set "VS_INSTALL_PATH="
+set "EVEJS_VS_QUERY_REQUIRES=%~1"
+set "EVEJS_VSWHERE_EXE=%VSWHERE_EXE%"
+set "EVEJS_VS_QUERY_RESULT=%TEMP%\evejs-vswhere-%RANDOM%-%RANDOM%.txt"
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; $vs = $env:EVEJS_VSWHERE_EXE; if (-not (Test-Path -LiteralPath $vs)) { exit 1 }; $args = @('-latest', '-products', '*'); if ($env:EVEJS_VS_QUERY_REQUIRES) { $args += @('-requires', $env:EVEJS_VS_QUERY_REQUIRES) }; $args += @('-property', 'installationPath'); & $vs @args | Select-Object -First 1" > "%EVEJS_VS_QUERY_RESULT%" 2>nul
+if errorlevel 1 goto QueryVisualStudioInstallFailed
+set /p VS_INSTALL_PATH=< "%EVEJS_VS_QUERY_RESULT%"
+del "%EVEJS_VS_QUERY_RESULT%" >nul 2>&1
+if defined VS_INSTALL_PATH exit /b 0
+
+:QueryVisualStudioInstallFailed
+del "%EVEJS_VS_QUERY_RESULT%" >nul 2>&1
+exit /b 1
+
 :EnsureVisualCppBuildTools
 call :ResolveVisualCppInstall
-if not errorlevel 1 (
-  call :VerifyWindowsSdkLib
-  if not errorlevel 1 (
-    echo   Visual C++ Build Tools and Windows SDK already installed:
-    echo       %VS_INSTALL_PATH%
-    exit /b 0
-  )
-  echo.
-  echo   Visual C++ Build Tools are installed, but Windows SDK libraries
-  echo   are missing or not visible to the MSVC environment.
-  echo   Repairing the C++ workload so kernel32.lib is available...
-  echo   This can take several minutes. Visual Studio Installer is not very
-  echo   chatty here; the spinner may sit still while it downloads SDK payloads.
-  call :ModifyVisualStudioCppWorkload
-  if errorlevel 1 exit /b 1
+if errorlevel 1 goto InstallVisualCppBuildTools
 
-  call :ResolveVisualCppInstall
-  if not errorlevel 1 (
-    call :VerifyWindowsSdkLib
-    if not errorlevel 1 exit /b 0
-  )
+call :VerifyWindowsSdkLib
+if errorlevel 1 goto RepairExistingVisualCppBuildTools
 
-  echo.
-  echo   Direct repair did not expose kernel32.lib yet.
-  echo   Windows may need a restart, or the SDK install may still be pending.
-  exit /b 1
-)
+echo   Visual C++ Build Tools and Windows SDK already installed:
+call :EchoIndentedValue "%VS_INSTALL_PATH%"
+exit /b 0
 
+:RepairExistingVisualCppBuildTools
+echo.
+echo   Visual C++ Build Tools are installed, but Windows SDK libraries
+echo   are missing or not visible to the MSVC environment.
+echo   Repairing the C++ workload so kernel32.lib is available...
+echo   This can take several minutes. Visual Studio Installer is not very
+echo   chatty here; the spinner may sit still while it downloads SDK payloads.
+call :ModifyVisualStudioCppWorkload
+if errorlevel 1 exit /b 1
+
+call :ResolveVisualCppInstall
+if errorlevel 1 goto VisualCppDirectRepairFailed
+
+call :VerifyWindowsSdkLib
+if not errorlevel 1 exit /b 0
+
+:VisualCppDirectRepairFailed
+echo.
+echo   Direct repair did not expose kernel32.lib yet.
+echo   Windows may need a restart, or the SDK install may still be pending.
+exit /b 1
+
+:InstallVisualCppBuildTools
 echo   Installing Visual Studio 2022 Build Tools with the C++ workload and Windows SDK...
 echo   This can take several minutes. Visual Studio Installer is not very
 echo   chatty here; the spinner may sit still while it downloads SDK payloads.
 "%WINGET_EXE%" install -e --id Microsoft.VisualStudio.2022.BuildTools --accept-package-agreements --accept-source-agreements --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add %WINDOWS_SDK_COMPONENT_PRIMARY% --includeRecommended"
 
 call :ResolveVisualCppInstall
-if not errorlevel 1 (
-  call :VerifyWindowsSdkLib
-  if not errorlevel 1 exit /b 0
-)
+if errorlevel 1 goto VisualCppWingetInstallNeedsRepair
 
+call :VerifyWindowsSdkLib
+if not errorlevel 1 exit /b 0
+
+:VisualCppWingetInstallNeedsRepair
 echo.
 echo   Build Tools are installed or partially installed, but the C++ workload
 echo   or Windows SDK library path was not detected yet. Attempting a direct
@@ -295,11 +326,12 @@ call :ModifyVisualStudioCppWorkload
 if errorlevel 1 exit /b 1
 
 call :ResolveVisualCppInstall
-if not errorlevel 1 (
-  call :VerifyWindowsSdkLib
-  if not errorlevel 1 exit /b 0
-)
+if errorlevel 1 goto VisualCppInstallFailed
 
+call :VerifyWindowsSdkLib
+if not errorlevel 1 exit /b 0
+
+:VisualCppInstallFailed
 echo.
 echo   [!] Visual Studio C++ Build Tools and Windows SDK could not be verified.
 echo       Missing component: Microsoft.VisualStudio.Component.VC.Tools.x86.x64
