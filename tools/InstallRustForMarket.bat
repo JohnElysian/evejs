@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 title EvEJS - Install Rust For Market
-set "EVEJS_INSTALL_RUST_MARKET_VERSION=v9.0.10"
+set "EVEJS_INSTALL_RUST_MARKET_VERSION=v9.0.11"
 
 for %%I in ("%~dp0..") do set "EVEJS_REPO_ROOT=%%~fI"
 set "POWERSHELL_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
@@ -15,6 +15,7 @@ set "MARKET_SEED_DIR=%EVEJS_REPO_ROOT%\tools\market-seed"
 set "MARKET_SERVER_DIR=%EVEJS_REPO_ROOT%\externalservices\market-server"
 set "VSWHERE_EXE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set "VS_INSTALLER_EXE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vs_installer.exe"
+set "VS_BUILDTOOLS_BOOTSTRAPPER_URL=https://aka.ms/vs/17/release/vs_BuildTools.exe"
 set "WINDOWS_SDK_COMPONENT_PRIMARY=Microsoft.VisualStudio.Component.Windows11SDK.26100"
 set "WINDOWS_SDK_COMPONENT_FALLBACK1=Microsoft.VisualStudio.Component.Windows11SDK.22621"
 set "WINDOWS_SDK_COMPONENT_FALLBACK2=Microsoft.VisualStudio.Component.Windows10SDK.20348"
@@ -314,7 +315,28 @@ exit /b 1
 echo   Installing Visual Studio 2022 Build Tools with the C++ workload and Windows SDK...
 echo   This can take several minutes. Visual Studio Installer is not very
 echo   chatty here; the spinner may sit still while it downloads SDK payloads.
-"%WINGET_EXE%" install -e --id Microsoft.VisualStudio.2022.BuildTools --accept-package-agreements --accept-source-agreements --override "--quiet --norestart --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add %WINDOWS_SDK_COMPONENT_PRIMARY% --includeRecommended"
+call :InstallVisualCppBuildToolsWithWinget
+if not errorlevel 1 goto VisualCppInstallCommandFinished
+
+echo.
+echo   winget did not finish the Build Tools install cleanly.
+echo   Trying the official Visual Studio Build Tools bootstrapper directly...
+call :InstallVisualCppBuildToolsDirect
+if errorlevel 1 goto VisualCppWingetInstallNeedsRepair
+
+:VisualCppInstallCommandFinished
+call :WaitForVisualStudioRegistration
+if not errorlevel 1 goto VisualCppInstallRegistrationReady
+
+echo.
+echo   Build Tools installer finished, but no Visual Studio instance was registered yet.
+echo   Trying the official Visual Studio Build Tools bootstrapper directly...
+call :InstallVisualCppBuildToolsDirect
+if errorlevel 1 goto VisualCppWingetInstallNeedsRepair
+call :WaitForVisualStudioRegistration
+if errorlevel 1 goto VisualCppWingetInstallNeedsRepair
+
+:VisualCppInstallRegistrationReady
 
 call :ResolveVisualCppInstall
 if errorlevel 1 goto VisualCppWingetInstallNeedsRepair
@@ -377,8 +399,47 @@ if errorlevel 1 exit /b 1
 exit /b 0
 
 :NoVisualStudioInstallToRepair
-echo   [!] No Visual Studio installation was found to repair.
+echo   No registered Visual Studio installation was found to repair.
+echo   Running the official Visual Studio Build Tools bootstrapper directly...
+call :InstallVisualCppBuildToolsDirect
+if errorlevel 1 exit /b 1
+call :WaitForVisualStudioRegistration
+if errorlevel 1 exit /b 1
+exit /b 0
+
+:InstallVisualCppBuildToolsWithWinget
+"%WINGET_EXE%" install -e --id Microsoft.VisualStudio.2022.BuildTools --accept-package-agreements --accept-source-agreements --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add %WINDOWS_SDK_COMPONENT_PRIMARY% --includeRecommended"
+exit /b %errorlevel%
+
+:InstallVisualCppBuildToolsDirect
+set "EVEJS_VS_BOOTSTRAPPER=%TEMP%\evejs-vs_BuildTools-%RANDOM%-%RANDOM%.exe"
+set "EVEJS_VS_BOOTSTRAPPER_EXE=%EVEJS_VS_BOOTSTRAPPER%"
+set "EVEJS_VS_BOOTSTRAPPER_URL=%VS_BUILDTOOLS_BOOTSTRAPPER_URL%"
+set "EVEJS_VS_BOOTSTRAPPER_SDK=%WINDOWS_SDK_COMPONENT_PRIMARY%"
+
+echo   Downloading Visual Studio Build Tools bootstrapper...
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri $env:EVEJS_VS_BOOTSTRAPPER_URL -OutFile $env:EVEJS_VS_BOOTSTRAPPER_EXE"
+if errorlevel 1 goto InstallVisualCppBuildToolsDirectFailed
+
+echo   Running Visual Studio Build Tools bootstrapper...
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; $args = @('--quiet', '--wait', '--norestart', '--add', 'Microsoft.VisualStudio.Workload.VCTools', '--add', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '--add', $env:EVEJS_VS_BOOTSTRAPPER_SDK, '--includeRecommended'); $p = Start-Process -FilePath $env:EVEJS_VS_BOOTSTRAPPER_EXE -ArgumentList $args -Wait -PassThru; exit $p.ExitCode"
+set "EVEJS_EXIT=%errorlevel%"
+del "%EVEJS_VS_BOOTSTRAPPER%" >nul 2>&1
+exit /b %EVEJS_EXIT%
+
+:InstallVisualCppBuildToolsDirectFailed
+del "%EVEJS_VS_BOOTSTRAPPER%" >nul 2>&1
 exit /b 1
+
+:WaitForVisualStudioRegistration
+set /a EVEJS_VS_WAIT_COUNT=0
+:WaitForVisualStudioRegistrationLoop
+call :ResolveAnyVisualStudioInstall >nul 2>&1
+if not errorlevel 1 exit /b 0
+set /a EVEJS_VS_WAIT_COUNT+=1
+if %EVEJS_VS_WAIT_COUNT% GEQ 12 exit /b 1
+"%POWERSHELL_EXE%" -NoProfile -Command "Start-Sleep -Seconds 5"
+goto WaitForVisualStudioRegistrationLoop
 
 :InstallStableToolchain
 if exist "%RUSTUP_EXE%" goto UseRustupExe
