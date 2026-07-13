@@ -24,23 +24,16 @@ set "VCVARS64_BAT="
 set "EVEJS_KERNEL32_LIB="
 set "EVEJS_EXIT=0"
 
+call :PrintHeader
+call :FastPathReady
+if not errorlevel 1 goto AlreadyReady
+
 call :EnsureAdmin
 if errorlevel 2 exit /b 0
 if errorlevel 1 exit /b 1
 
 echo.
-echo   ============================================================
-echo     EvEJS - Install Rust For Market
-echo   ============================================================
-echo.
-echo   This installs and verifies the Windows build stack used by
-echo   the optional standalone market builder and market server:
-echo.
-echo     - Rust / cargo
-echo     - Visual Studio Build Tools C++ workload
-echo     - MSVC link.exe / cl.exe
-echo     - Windows SDK libraries such as kernel32.lib
-echo     - Cargo linker wrapper for normal double-clicked consoles
+echo   Admin rights confirmed. Installing or repairing missing components...
 echo.
 
 call :ResolveWinget
@@ -95,6 +88,97 @@ echo     2. Build the market database
 echo     3. Run StartMarketServer.bat
 echo.
 pause
+exit /b 0
+
+:PrintHeader
+echo.
+echo   ============================================================
+echo     EvEJS - Install Rust For Market
+echo   ============================================================
+echo.
+echo   This installs and verifies the Windows build stack used by
+echo   the optional standalone market builder and market server:
+echo.
+echo     - Rust / cargo
+echo     - Visual Studio Build Tools C++ workload
+echo     - MSVC link.exe / cl.exe
+echo     - Windows SDK libraries such as kernel32.lib
+echo     - Cargo linker wrapper for normal double-clicked consoles
+echo.
+exit /b 0
+
+:AlreadyReady
+echo   Existing Rust/MSVC market build stack is already ready.
+echo.
+if defined CARGO_EXE echo   Cargo:       %CARGO_EXE%
+if defined RUSTC_EXE echo   Rustc:       %RUSTC_EXE%
+if defined VCVARS64_BAT echo   MSVC env:    %VCVARS64_BAT%
+if defined EVEJS_KERNEL32_LIB echo   SDK lib:     %EVEJS_KERNEL32_LIB%
+if exist "%MSVC_LINK_WRAPPER%" echo   Linker cfg:  %MSVC_LINK_WRAPPER%
+echo.
+echo   No Administrator permission was needed.
+echo.
+echo   Next steps:
+echo     1. Run BuildMarketSeed.bat
+echo     2. Build the market database
+echo     3. Run StartMarketServer.bat
+echo.
+pause
+exit /b 0
+
+:FastPathReady
+set "PATH=%CARGO_BIN%;%PATH%"
+call :ResolveCargoQuiet
+if errorlevel 1 exit /b 1
+call :ResolveRustcQuiet
+if errorlevel 1 exit /b 1
+call :ResolveVisualCppInstall >nul 2>&1
+if errorlevel 1 exit /b 1
+call :VerifyVisualCppEnvironmentQuiet
+if errorlevel 1 exit /b 1
+if not exist "%MSVC_LINK_WRAPPER%" (
+  call :WriteCargoMsvcLinkWrapper >nul 2>&1
+  if errorlevel 1 exit /b 1
+)
+call :ConfigureCargoMsvcLinker >nul 2>&1
+if errorlevel 1 exit /b 1
+exit /b 0
+
+:ResolveCargoQuiet
+if exist "%CARGO_EXE%" exit /b 0
+for /f "delims=" %%I in ('where cargo 2^>nul') do (
+  set "CARGO_EXE=%%I"
+  exit /b 0
+)
+exit /b 1
+
+:ResolveRustcQuiet
+if exist "%RUSTC_EXE%" exit /b 0
+for /f "delims=" %%I in ('where rustc 2^>nul') do (
+  set "RUSTC_EXE=%%I"
+  exit /b 0
+)
+exit /b 1
+
+:VerifyVisualCppEnvironmentQuiet
+call "%VCVARS64_BAT%" >nul 2>&1
+if errorlevel 1 exit /b 1
+where link.exe >nul 2>&1
+if errorlevel 1 exit /b 1
+where cl.exe >nul 2>&1
+if errorlevel 1 exit /b 1
+set "EVEJS_KERNEL32_LIB="
+call :FindKernel32InLibPath
+if not defined EVEJS_KERNEL32_LIB exit /b 1
+exit /b 0
+
+:FindKernel32InLibPath
+for %%P in ("%LIB:;=" "%") do (
+  if exist "%%~P\kernel32.lib" (
+    set "EVEJS_KERNEL32_LIB=%%~P\kernel32.lib"
+    exit /b 0
+  )
+)
 exit /b 0
 
 :EnsureAdmin
