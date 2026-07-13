@@ -1,6 +1,7 @@
 @echo off
 setlocal EnableExtensions
 title EvEJS - Install Rust For Market
+set "EVEJS_INSTALL_RUST_MARKET_VERSION=v9.0.9"
 
 for %%I in ("%~dp0..") do set "EVEJS_REPO_ROOT=%%~fI"
 set "POWERSHELL_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
@@ -93,7 +94,7 @@ exit /b 0
 :PrintHeader
 echo.
 echo   ============================================================
-echo     EvEJS - Install Rust For Market
+echo     EvEJS - Install Rust For Market %EVEJS_INSTALL_RUST_MARKET_VERSION%
 echo   ============================================================
 echo.
 echo   This installs and verifies the Windows build stack used by
@@ -140,10 +141,10 @@ call :ResolveVisualCppInstall >nul 2>&1
 if errorlevel 1 exit /b 1
 call :VerifyVisualCppEnvironmentQuiet
 if errorlevel 1 exit /b 1
-if not exist "%MSVC_LINK_WRAPPER%" (
-  call :WriteCargoMsvcLinkWrapper >nul 2>&1
-  if errorlevel 1 exit /b 1
-)
+if exist "%MSVC_LINK_WRAPPER%" goto FastPathWrapperReady
+call :WriteCargoMsvcLinkWrapper >nul 2>&1
+if errorlevel 1 exit /b 1
+:FastPathWrapperReady
 call :ConfigureCargoMsvcLinker >nul 2>&1
 if errorlevel 1 exit /b 1
 exit /b 0
@@ -177,12 +178,16 @@ if not defined EVEJS_KERNEL32_LIB exit /b 1
 exit /b 0
 
 :FindKernel32InLibPath
-for %%P in ("%LIB:;=" "%") do (
-  if exist "%%~P\kernel32.lib" (
-    set "EVEJS_KERNEL32_LIB=%%~P\kernel32.lib"
-    exit /b 0
-  )
-)
+set "EVEJS_KERNEL32_LIB="
+set "EVEJS_KERNEL32_RESULT=%TEMP%\evejs-kernel32-lib-%RANDOM%-%RANDOM%.txt"
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'SilentlyContinue'; foreach ($p in ($env:LIB -split ';')) { if ([string]::IsNullOrWhiteSpace($p)) { continue }; $candidate = Join-Path $p 'kernel32.lib'; if (Test-Path -LiteralPath $candidate) { [Console]::Out.WriteLine($candidate); exit 0 } }; exit 1" > "%EVEJS_KERNEL32_RESULT%" 2>nul
+if errorlevel 1 goto FindKernel32InLibPathFailed
+set /p EVEJS_KERNEL32_LIB=< "%EVEJS_KERNEL32_RESULT%"
+del "%EVEJS_KERNEL32_RESULT%" >nul 2>&1
+exit /b 0
+
+:FindKernel32InLibPathFailed
+del "%EVEJS_KERNEL32_RESULT%" >nul 2>&1
 exit /b 0
 
 :EnsureAdmin
@@ -409,29 +414,16 @@ exit /b 0
 
 :VerifyVisualCppEnvironment
 call :ResolveVisualCppInstall
-if errorlevel 1 (
-  echo   [!] Visual C++ Build Tools are not installed correctly.
-  exit /b 1
-)
+if errorlevel 1 goto VisualCppInstallMissing
 
 call "%VCVARS64_BAT%" >nul
-if errorlevel 1 (
-  echo   [!] Failed to initialize the Visual C++ build environment:
-  echo       %VCVARS64_BAT%
-  exit /b 1
-)
+if errorlevel 1 goto VisualCppEnvInitFailed
 
 where link.exe >nul 2>&1
-if errorlevel 1 (
-  echo   [!] link.exe was not found after initializing Visual C++.
-  exit /b 1
-)
+if errorlevel 1 goto LinkExeMissing
 
 where cl.exe >nul 2>&1
-if errorlevel 1 (
-  echo   [!] cl.exe was not found after initializing Visual C++.
-  exit /b 1
-)
+if errorlevel 1 goto ClExeMissing
 
 call :VerifyWindowsSdkLib
 if errorlevel 1 exit /b 1
@@ -443,26 +435,35 @@ for /f "delims=" %%I in ('where link.exe 2^>nul') do (
 :LinkEchoDone
 exit /b 0
 
+:VisualCppInstallMissing
+echo   [!] Visual C++ Build Tools are not installed correctly.
+exit /b 1
+
+:VisualCppEnvInitFailed
+echo   [!] Failed to initialize the Visual C++ build environment:
+call :EchoIndentedValue "%VCVARS64_BAT%"
+exit /b 1
+
+:LinkExeMissing
+echo   [!] link.exe was not found after initializing Visual C++.
+exit /b 1
+
+:ClExeMissing
+echo   [!] cl.exe was not found after initializing Visual C++.
+exit /b 1
+
 :VerifyWindowsSdkLib
 set "EVEJS_KERNEL32_LIB="
-if not defined VCVARS64_BAT (
-  call :ResolveVisualCppInstall
-  if errorlevel 1 exit /b 1
-)
+if defined VCVARS64_BAT goto VerifyWindowsSdkLibHaveVcvars
+call :ResolveVisualCppInstall
+if errorlevel 1 exit /b 1
+:VerifyWindowsSdkLibHaveVcvars
 
 call "%VCVARS64_BAT%" >nul
-if errorlevel 1 (
-  echo   [!] Failed to initialize the Visual C++ build environment:
-  echo       %VCVARS64_BAT%
-  exit /b 1
-)
+if errorlevel 1 goto VisualCppEnvInitFailed
 
-for %%P in ("%LIB:;=" "%") do (
-  if exist "%%~P\kernel32.lib" (
-    set "EVEJS_KERNEL32_LIB=%%~P\kernel32.lib"
-    goto Kernel32Found
-  )
-)
+call :FindKernel32InLibPath
+if defined EVEJS_KERNEL32_LIB goto Kernel32Found
 
 call :FindKernel32InSdkRoot "%ProgramFiles(x86)%\Windows Kits\10\Lib"
 if defined EVEJS_KERNEL32_LIB goto Kernel32FoundButNotInLib
@@ -479,12 +480,15 @@ exit /b 1
 set "EVEJS_SDK_LIB_ROOT=%~1"
 if not defined EVEJS_SDK_LIB_ROOT exit /b 0
 if not exist "%EVEJS_SDK_LIB_ROOT%" exit /b 0
-for /d %%V in ("%EVEJS_SDK_LIB_ROOT%\*") do (
-  if exist "%%~fV\um\x64\kernel32.lib" (
-    set "EVEJS_KERNEL32_LIB=%%~fV\um\x64\kernel32.lib"
-    exit /b 0
-  )
-)
+set "EVEJS_KERNEL32_RESULT=%TEMP%\evejs-sdk-kernel32-%RANDOM%-%RANDOM%.txt"
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'SilentlyContinue'; $root = $env:EVEJS_SDK_LIB_ROOT; if (-not (Test-Path -LiteralPath $root)) { exit 1 }; Get-ChildItem -LiteralPath $root -Directory | Sort-Object Name -Descending | ForEach-Object { $candidate = Join-Path $_.FullName 'um\x64\kernel32.lib'; if (Test-Path -LiteralPath $candidate) { [Console]::Out.WriteLine($candidate); exit 0 } }; exit 1" > "%EVEJS_KERNEL32_RESULT%" 2>nul
+if errorlevel 1 goto FindKernel32InSdkRootFailed
+set /p EVEJS_KERNEL32_LIB=< "%EVEJS_KERNEL32_RESULT%"
+del "%EVEJS_KERNEL32_RESULT%" >nul 2>&1
+exit /b 0
+
+:FindKernel32InSdkRootFailed
+del "%EVEJS_KERNEL32_RESULT%" >nul 2>&1
 exit /b 0
 
 :Kernel32FoundButNotInLib
@@ -501,19 +505,18 @@ exit /b 0
 :WriteCargoMsvcLinkWrapper
 if not exist "%CARGO_BIN%" mkdir "%CARGO_BIN%" >nul 2>&1
 
-(
-  echo @echo off
-  echo call "%VCVARS64_BAT%" ^>nul
-  echo if errorlevel 1 exit /b %%errorlevel%%
-  echo link.exe %%*
-  echo exit /b %%errorlevel%%
-) > "%MSVC_LINK_WRAPPER%"
+> "%MSVC_LINK_WRAPPER%" echo @echo off
+>> "%MSVC_LINK_WRAPPER%" echo call "%VCVARS64_BAT%" ^>nul
+>> "%MSVC_LINK_WRAPPER%" echo if errorlevel 1 exit /b %%errorlevel%%
+>> "%MSVC_LINK_WRAPPER%" echo link.exe %%*
+>> "%MSVC_LINK_WRAPPER%" echo exit /b %%errorlevel%%
 
-if not exist "%MSVC_LINK_WRAPPER%" (
-  echo   [!] Failed to write cargo MSVC linker wrapper:
-  echo       %MSVC_LINK_WRAPPER%
-  exit /b 1
-)
+if exist "%MSVC_LINK_WRAPPER%" goto CargoMsvcLinkWrapperWritten
+echo   [!] Failed to write cargo MSVC linker wrapper:
+call :EchoIndentedValue "%MSVC_LINK_WRAPPER%"
+exit /b 1
+
+:CargoMsvcLinkWrapperWritten
 
 echo   Cargo MSVC linker wrapper:
 echo       %MSVC_LINK_WRAPPER%
