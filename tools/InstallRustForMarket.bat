@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 title EvEJS - Install Rust For Market
-set "EVEJS_INSTALL_RUST_MARKET_VERSION=v9.0.9"
+set "EVEJS_INSTALL_RUST_MARKET_VERSION=v9.0.10"
 
 for %%I in ("%~dp0..") do set "EVEJS_REPO_ROOT=%%~fI"
 set "POWERSHELL_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
@@ -314,7 +314,7 @@ exit /b 1
 echo   Installing Visual Studio 2022 Build Tools with the C++ workload and Windows SDK...
 echo   This can take several minutes. Visual Studio Installer is not very
 echo   chatty here; the spinner may sit still while it downloads SDK payloads.
-"%WINGET_EXE%" install -e --id Microsoft.VisualStudio.2022.BuildTools --accept-package-agreements --accept-source-agreements --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add %WINDOWS_SDK_COMPONENT_PRIMARY% --includeRecommended"
+"%WINGET_EXE%" install -e --id Microsoft.VisualStudio.2022.BuildTools --accept-package-agreements --accept-source-agreements --override "--quiet --norestart --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add %WINDOWS_SDK_COMPONENT_PRIMARY% --includeRecommended"
 
 call :ResolveVisualCppInstall
 if errorlevel 1 goto VisualCppWingetInstallNeedsRepair
@@ -352,10 +352,7 @@ exit /b 1
 :VisualStudioInstallerFound
 
 call :ResolveAnyVisualStudioInstall
-if errorlevel 1 (
-  echo   [!] No Visual Studio installation was found to repair.
-  exit /b 1
-)
+if errorlevel 1 goto NoVisualStudioInstallToRepair
 
 call :ModifyVisualStudioCppWorkloadWithSdk "%WINDOWS_SDK_COMPONENT_PRIMARY%"
 if not errorlevel 1 exit /b 0
@@ -375,9 +372,13 @@ exit /b 1
 :ModifyVisualStudioCppWorkloadWithSdk
 set "EVEJS_SDK_COMPONENT=%~1"
 echo   Repairing C++ workload with %EVEJS_SDK_COMPONENT%...
-"%VS_INSTALLER_EXE%" modify --installPath "%VS_INSTALL_PATH%" --quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add "%EVEJS_SDK_COMPONENT%" --includeRecommended
+"%VS_INSTALLER_EXE%" modify --installPath "%VS_INSTALL_PATH%" --quiet --norestart --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add "%EVEJS_SDK_COMPONENT%" --includeRecommended
 if errorlevel 1 exit /b 1
 exit /b 0
+
+:NoVisualStudioInstallToRepair
+echo   [!] No Visual Studio installation was found to repair.
+exit /b 1
 
 :InstallStableToolchain
 if exist "%RUSTUP_EXE%" goto UseRustupExe
