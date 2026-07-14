@@ -7,6 +7,11 @@ set "MARKET_SEED_DIR=%EVEJS_REPO_ROOT%\tools\market-seed"
 set "MARKET_SEED_CONFIG=%MARKET_SEED_DIR%\config\market-seed.local.toml"
 set "MARKET_COMMON_DIR=%EVEJS_REPO_ROOT%\externalservices\market-server\crates\market-common"
 set "EVEJS_NEWDB_DATA_DIR=%EVEJS_REPO_ROOT%\_local\newDatabase\data"
+set "POWERSHELL_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+set "VSWHERE_EXE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+set "VS_INSTALL_PATH="
+set "VCVARS64_BAT="
+set "EVEJS_STDARG_HEADER="
 
 if not exist "%MARKET_SEED_DIR%\Cargo.toml" (
   echo.
@@ -20,6 +25,8 @@ call :RequireMarketCommon
 if errorlevel 1 exit /b 1
 
 call :ResolveCargo
+if errorlevel 1 exit /b 1
+call :InitializeMsvcBuildEnvironment
 if errorlevel 1 exit /b 1
 
 if /i "%~1"=="full" goto FullBuild
@@ -174,6 +181,110 @@ echo       Run tools\InstallRustForMarket.bat
 echo       or install Rust manually with:
 echo       winget install -e --id Rustlang.Rustup
 echo.
+pause
+exit /b 1
+
+:InitializeMsvcBuildEnvironment
+call :ResolveVisualCppInstall
+if errorlevel 1 goto MsvcMissing
+call "%VCVARS64_BAT%" >nul
+if errorlevel 1 goto MsvcEnvFailed
+where cl.exe >nul 2>&1
+if errorlevel 1 goto MsvcCompilerMissing
+where link.exe >nul 2>&1
+if errorlevel 1 goto MsvcLinkerMissing
+call :FindStdargInInclude
+if not defined EVEJS_STDARG_HEADER goto MsvcHeaderMissing
+exit /b 0
+
+:ResolveVisualCppInstall
+set "VS_INSTALL_PATH="
+set "VCVARS64_BAT="
+call :ResolveVsWhere
+if errorlevel 1 exit /b 1
+call :QueryVisualStudioInstall "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+if errorlevel 1 exit /b 1
+if not defined VS_INSTALL_PATH exit /b 1
+if not exist "%VS_INSTALL_PATH%\VC\Auxiliary\Build\vcvars64.bat" exit /b 1
+set "VCVARS64_BAT=%VS_INSTALL_PATH%\VC\Auxiliary\Build\vcvars64.bat"
+exit /b 0
+
+:ResolveVsWhere
+if exist "%VSWHERE_EXE%" exit /b 0
+set "EVEJS_WHERE_RESULT=%TEMP%\evejs-where-vswhere-%RANDOM%-%RANDOM%.txt"
+where vswhere > "%EVEJS_WHERE_RESULT%" 2>nul
+if errorlevel 1 goto ResolveVsWhereFailed
+set /p VSWHERE_EXE=< "%EVEJS_WHERE_RESULT%"
+del "%EVEJS_WHERE_RESULT%" >nul 2>&1
+if defined VSWHERE_EXE exit /b 0
+
+:ResolveVsWhereFailed
+del "%EVEJS_WHERE_RESULT%" >nul 2>&1
+exit /b 1
+
+:QueryVisualStudioInstall
+set "VS_INSTALL_PATH="
+set "EVEJS_VS_QUERY_REQUIRES=%~1"
+set "EVEJS_VSWHERE_EXE=%VSWHERE_EXE%"
+set "EVEJS_VS_QUERY_RESULT=%TEMP%\evejs-vswhere-%RANDOM%-%RANDOM%.txt"
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; $vs = $env:EVEJS_VSWHERE_EXE; if (-not (Test-Path -LiteralPath $vs)) { exit 1 }; $args = @('-latest', '-products', '*'); if ($env:EVEJS_VS_QUERY_REQUIRES) { $args += @('-requires', $env:EVEJS_VS_QUERY_REQUIRES) }; $args += @('-property', 'installationPath'); & $vs @args | Select-Object -First 1" > "%EVEJS_VS_QUERY_RESULT%" 2>nul
+if errorlevel 1 goto QueryVisualStudioInstallFailed
+set /p VS_INSTALL_PATH=< "%EVEJS_VS_QUERY_RESULT%"
+del "%EVEJS_VS_QUERY_RESULT%" >nul 2>&1
+if defined VS_INSTALL_PATH exit /b 0
+
+:QueryVisualStudioInstallFailed
+del "%EVEJS_VS_QUERY_RESULT%" >nul 2>&1
+exit /b 1
+
+:FindStdargInInclude
+set "EVEJS_STDARG_HEADER="
+set "EVEJS_STDARG_RESULT=%TEMP%\evejs-stdarg-header-%RANDOM%-%RANDOM%.txt"
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'SilentlyContinue'; foreach ($p in ($env:INCLUDE -split ';')) { if ([string]::IsNullOrWhiteSpace($p)) { continue }; $candidate = Join-Path $p 'stdarg.h'; if (Test-Path -LiteralPath $candidate) { [Console]::Out.WriteLine($candidate); exit 0 } }; exit 1" > "%EVEJS_STDARG_RESULT%" 2>nul
+if errorlevel 1 goto FindStdargInIncludeFailed
+set /p EVEJS_STDARG_HEADER=< "%EVEJS_STDARG_RESULT%"
+del "%EVEJS_STDARG_RESULT%" >nul 2>&1
+exit /b 0
+
+:FindStdargInIncludeFailed
+del "%EVEJS_STDARG_RESULT%" >nul 2>&1
+exit /b 0
+
+:MsvcMissing
+echo.
+echo   [!] Visual Studio C++ Build Tools could not be found.
+echo       Run tools\InstallRustForMarket.bat, then run this again.
+pause
+exit /b 1
+
+:MsvcEnvFailed
+echo.
+echo   [!] Failed to initialize the Visual Studio C++ build environment:
+echo       %VCVARS64_BAT%
+pause
+exit /b 1
+
+:MsvcCompilerMissing
+echo.
+echo   [!] cl.exe was not found after initializing Visual Studio C++.
+echo       Run tools\InstallRustForMarket.bat again.
+pause
+exit /b 1
+
+:MsvcLinkerMissing
+echo.
+echo   [!] link.exe was not found after initializing Visual Studio C++.
+echo       Run tools\InstallRustForMarket.bat again.
+pause
+exit /b 1
+
+:MsvcHeaderMissing
+echo.
+echo   [!] Visual Studio C++ headers are missing from this console.
+echo       SQLite needs stdarg.h while compiling bundled C source.
+echo.
+echo       Run tools\InstallRustForMarket.bat again. If Windows asks for a
+echo       restart after Visual Studio Build Tools, restart and then retry.
 pause
 exit /b 1
 
