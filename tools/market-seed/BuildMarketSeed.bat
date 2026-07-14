@@ -295,20 +295,55 @@ echo   [!] Generated EveJS database data was not found.
 echo       Expected:
 echo       %EVEJS_NEWDB_DATA_DIR%
 echo.
-echo       Running DatabaseCreator.bat now...
+echo       Market seeding needs generated static EveJS data first.
+echo       Running the database creator now...
 echo.
-call "%EVEJS_REPO_ROOT%\DatabaseCreator.bat"
+call :RunDatabaseCreator
 if errorlevel 1 (
   echo.
-  echo   [ERROR] DatabaseCreator.bat failed. Market seeding cannot continue.
+  echo   [ERROR] Database creation failed. Market seeding cannot continue.
   pause
   exit /b 1
 )
 if exist "%EVEJS_NEWDB_DATA_DIR%\stations\data.json" if exist "%EVEJS_NEWDB_DATA_DIR%\solarSystems\data.json" if exist "%EVEJS_NEWDB_DATA_DIR%\itemTypes\data.json" exit /b 0
 echo.
-echo   [ERROR] DatabaseCreator.bat completed, but required generated market inputs are still missing.
+echo   [ERROR] Database creation completed, but required generated market inputs are still missing.
 echo.
 pause
+exit /b 1
+
+:RunDatabaseCreator
+if not exist "%EVEJS_REPO_ROOT%\DatabaseCreator.bat" goto TryToolsDatabaseCreatorBat
+call "%EVEJS_REPO_ROOT%\DatabaseCreator.bat"
+exit /b %errorlevel%
+
+:TryToolsDatabaseCreatorBat
+if not exist "%EVEJS_REPO_ROOT%\tools\DatabaseCreator\DatabaseCreator.bat" goto TryToolsCreateDatabaseBat
+call "%EVEJS_REPO_ROOT%\tools\DatabaseCreator\DatabaseCreator.bat"
+exit /b %errorlevel%
+
+:TryToolsCreateDatabaseBat
+if not exist "%EVEJS_REPO_ROOT%\tools\DatabaseCreator\CreateDatabase.bat" goto TryNativeDatabaseCreatorExe
+call "%EVEJS_REPO_ROOT%\tools\DatabaseCreator\CreateDatabase.bat"
+exit /b %errorlevel%
+
+:TryNativeDatabaseCreatorExe
+if not exist "%EVEJS_REPO_ROOT%\tools\DatabaseCreator\bin\DatabaseCreator.exe" goto DatabaseCreatorEntrypointMissing
+"%EVEJS_REPO_ROOT%\tools\DatabaseCreator\bin\DatabaseCreator.exe" --repo-root "%EVEJS_REPO_ROOT%"
+exit /b %errorlevel%
+
+:DatabaseCreatorEntrypointMissing
+echo.
+echo   [ERROR] No DatabaseCreator entrypoint was found in this EveJS folder.
+echo.
+echo       Expected one of:
+echo       %EVEJS_REPO_ROOT%\DatabaseCreator.bat
+echo       %EVEJS_REPO_ROOT%\tools\DatabaseCreator\DatabaseCreator.bat
+echo       %EVEJS_REPO_ROOT%\tools\DatabaseCreator\CreateDatabase.bat
+echo       %EVEJS_REPO_ROOT%\tools\DatabaseCreator\bin\DatabaseCreator.exe
+echo.
+echo       This EveJS package is incomplete. Download the latest full release
+echo       and extract it into a fresh empty folder.
 exit /b 1
 
 :RequireMarketCommon
