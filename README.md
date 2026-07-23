@@ -11,10 +11,12 @@
 [![Setup](https://img.shields.io/badge/Setup-One--Click-success)](#quick-start)
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/KMuJrMDEBa)
 
-Note: This GitHub is V9 of Eve.JS. i'm proud of it.
+Note: This GitHub is V9 of Eve.JS.
 
 A hero/lovely guy named Farmer has started updating eve.js, presently at V12,
 You can find these on discord!
+
+i repeat: join discord. get the updates. this repo is ancient.
 
 this repo wont be updated -- or supported! 
 However, it is working for what it is!
@@ -23,7 +25,6 @@ you can fight rats, mine, time dilation, full market, try out all the ships, exp
 thank you to Icey, deer_hunter & myself for this project existing today :)
 
 CCP have issued a DMCA against eve.js before, this repo may vanish at any time.
-
 
 
 </div>
