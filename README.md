@@ -2,7 +2,7 @@
 
 # EvEJS
 
-**A local EVE Online emulator for research, preservation, and New Eden tinkering.**
+**This repo is no longer supported. Updates are on discord. A local EVE Online emulator for research, preservation, and New Eden tinkering.**
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?logo=windows&logoColor=white)](#quick-start)
 [![Node.js](https://img.shields.io/badge/Node.js-LTS-5FA04E?logo=nodedotjs&logoColor=white)](#quick-start)
